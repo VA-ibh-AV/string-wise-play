@@ -1,5 +1,7 @@
 import { cosmos } from './cosmos/manifest';
 import { garden } from './garden/manifest';
+import { drift } from './drift/manifest';
+import { orbit } from './orbit/manifest';
 import type { ProjectManifest } from './types';
 
 const soon = (id: string, title: string, tagline: string, teaser: string, topics: string[], accent: string): ProjectManifest => ({
@@ -14,7 +16,8 @@ export const PROJECTS: ProjectManifest[] = [
   garden,
   soon('choir', 'Consensus Choir', 'Raft, as sound.', 'Leader election and log replication you can hear.', ['raft', 'consensus'], '#C7A4FF'),
   soon('zen', 'Data Structure Zen Garden', 'Rake a B-tree.', 'B-trees, hash rings and heaps, arranged calmly.', ['b-trees', 'hash rings', 'heaps'], '#8FC3FF'),
-  soon('slow-packet', 'Slow Packet', "One packet's long trip.", 'DNS → TCP → NAT → conntrack → socket, slowly.', ['dns', 'tcp', 'nat', 'conntrack'], '#7FF0FF'),
+  drift,
+  orbit,
 ];
 
 export const liveProjects = PROJECTS.filter(p => p.load);
