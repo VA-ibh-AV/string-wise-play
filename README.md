@@ -10,7 +10,7 @@ Each project is a small world you can explore for five minutes between tasks. Th
 |---|---|---|---|
 | **Kernel Cosmos** | Ported (beta) | `/cosmos` | Linux processes, scheduling, memory, page cache, interrupts, cgroups, namespaces, signals |
 | Goroutine Lanterns | Idea | `/lanterns` | Go channels, `hchan`, select, deadlocks |
-| Packet Garden | Idea | `/garden` | Routing, caching, load balancing |
+| **Packet Garden** | Ported (beta) | `/garden` | Link-state routing and convergence, load balancing, caching, in a calm 3D sky with generative music |
 | Consensus Choir | Idea | `/choir` | Raft leader election and log replication, as sound |
 | Data Structure Zen Garden | Idea | `/zen` | B-trees, hash rings, heaps |
 | Slow Packet | Idea | `/slow-packet` | One packet's trip: DNS → TCP → NAT → conntrack → socket |
