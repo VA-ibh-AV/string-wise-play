@@ -20,8 +20,10 @@ export interface WorldOptions {
   done?: Iterable<MissionId>;
 }
 
-export function createWorld({ seed = 1, done = [] }: WorldOptions = {}): World {
-  const w: World = {
+/** A world with no processes and no missions: the shell a live source fills in. */
+export function createEmptyWorld({ seed = 1, done = [], mode = 'sim' }: WorldOptions & { mode?: World['mode'] } = {}): World {
+  return {
+    mode,
     seed,
     rng: createRng(seed),
     clock: createClock(),
@@ -44,6 +46,10 @@ export function createWorld({ seed = 1, done = [] }: WorldOptions = {}): World {
     view: { lens: null, selected: null, nsInside: false },
     missions: new Set(done),
   };
+}
+
+export function createWorld(opts: WorldOptions = {}): World {
+  const w = createEmptyWorld(opts);
   attachMissions(w);
   PROCESSES.forEach((d, i) => spawnProc(w, d, { state: i % 3 === 0 ? 'R' : 'S' }));
   schedTick(w);
@@ -199,6 +205,14 @@ export function command(w: World, cmd: Command): number | void {
       noteAt(w, p, `oom_score_adj ${p.oomAdj}`, '#FFB38A');
       return;
   }
+}
+
+const VIEW_COMMANDS = new Set<Command['type']>(['select', 'lens', 'nsView']);
+
+/** The read-only subset: changes what the viewer looks at, never the processes. */
+export function viewCommand(w: World, cmd: Command): number | void {
+  if (!VIEW_COMMANDS.has(cmd.type)) return;
+  return command(w, cmd);
 }
 
 /** Step `sec` sim seconds and return every event emitted (for tests and fast-forward). */

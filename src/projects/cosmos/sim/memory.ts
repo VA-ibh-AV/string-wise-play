@@ -3,8 +3,8 @@ import { block, dmesg, note, noteAt, now, procList, throttle, transition } from 
 import { RAM, SWAP, type Proc, type World } from './types';
 
 /** Shared COW pages are counted once, in the parent, so only rss is summed. */
-export const memUsed = (w: World) => procList(w).reduce((s, p) => s + (p.state === 'Z' ? 0 : p.rss), 0);
-export const freeMem = (w: World) => RAM - memUsed(w) - w.mem.cache;
+export const memUsed = (w: World) => w.mem.used ?? procList(w).reduce((s, p) => s + (p.state === 'Z' ? 0 : p.rss), 0);
+export const freeMem = (w: World) => w.mem.ram - memUsed(w) - w.mem.cache;
 
 export function oomScore(p: Proc) {
   if (p.oomAdj <= -1000 || p.kind === 'kernel' || p.pid === 1) return 0;

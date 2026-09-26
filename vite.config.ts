@@ -10,7 +10,7 @@ const pkg = (name: string) => ({
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: ['engine', 'three-kit', 'audio', 'ui', 'progress'].map(pkg),
+    alias: ['engine', 'three-kit', 'audio', 'ui', 'progress', 'protocol'].map(pkg),
   },
   server: { host: true },
   build: {

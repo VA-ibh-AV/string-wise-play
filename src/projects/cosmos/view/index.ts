@@ -23,7 +23,7 @@ export interface CosmosView {
  * Builds the three.js scene for a world. The view only reads world state and
  * listens to sim events; it never changes the sim.
  */
-export function createCosmosView(canvas: HTMLCanvasElement, world: World, opts: { reduced: boolean }): CosmosView {
+export function createCosmosView(canvas: HTMLCanvasElement, world: World, opts: { reduced: boolean; bubbleLabel?: string }): CosmosView {
   const soft = softTexture();
   const text = createTextFactory();
   const { renderer, scene, camera } = createScene(canvas, soft);
@@ -34,7 +34,7 @@ export function createCosmosView(canvas: HTMLCanvasElement, world: World, opts: 
   const sparks = new SparkSystem(scene, soft);
   const popups = new Popups(scene, text);
   const dust = createDust(scene, soft);
-  const bubble = createBubble(scene, text);
+  const bubble = createBubble(scene, text, opts.bubbleLabel);
   const hole = createBlackHole(scene, soft, text);
   const links = createLinks(scene, text);
   const orbit = new OrbitFollowCamera(camera, canvas, { minR: 16, maxR: 70, restR: 46, home: new THREE.Vector3(0, -1, 0), reduced: opts.reduced });
@@ -145,7 +145,9 @@ export function createCosmosView(canvas: HTMLCanvasElement, world: World, opts: 
       for (const e of queue.splice(0)) handle(e);
       planets.sync(bubble.center);
 
-      bubble.update(simDt, t, lens() === 'namespaces');
+      let pod = world.mode === 'sim';
+      if (!pod) for (const p of world.procs.values()) if (p.ns) { pod = true; break; }
+      bubble.update(simDt, t, lens() === 'namespaces', pod);
       hole.update(simDt, world, planets);
       planets.update(simDt, t, {
         lens: world.view.lens,

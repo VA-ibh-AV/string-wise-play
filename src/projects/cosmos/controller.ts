@@ -4,8 +4,12 @@ import { loadProgress, saveProgress } from '@play/progress';
 import { attachCosmosSound } from './audio/cosmosSound';
 import { MISSIONS, type MissionId } from './content/missions';
 import type { LensId } from './content/lenses';
-import { command, createWorld, record, shownPid, step, type Command, type World } from './sim';
-import { initialCosmosState, useCosmos } from './store';
+import { record, shownPid, type Command, type World } from './sim';
+import { initialCosmosState, useCosmos, type CosmosMode } from './store';
+import type { DataSource } from './data/source';
+import { MockSource } from './data/mock-source';
+import { LiveSource } from './data/live-source';
+import type { LiveState } from './data/live-adapter';
 import { createCosmosView, type CosmosView } from './view';
 
 export const PROJECT_ID = 'cosmos';
@@ -16,6 +20,7 @@ const MISSION_IDS = new Set<string>(MISSIONS.map(m => m.id));
  * Mount creates everything; dispose() tears all of it down.
  */
 export class CosmosController {
+  readonly source: DataSource;
   readonly world: World;
   readonly view: CosmosView;
   private loop: Loop;
@@ -24,11 +29,23 @@ export class CosmosController {
   private canvas: HTMLCanvasElement;
   private toastId = 0;
 
-  constructor(host: HTMLElement, opts: { reduced: boolean; seed?: number }) {
-    useCosmos.setState({ ...initialCosmosState });
+  constructor(host: HTMLElement, opts: { reduced: boolean; mode: CosmosMode; seed?: number }) {
     const saved = [...loadProgress(PROJECT_ID)].filter((id): id is MissionId => MISSION_IDS.has(id));
-    this.world = createWorld({ seed: opts.seed ?? (Date.now() & 0x7fffffff), done: saved });
-    useCosmos.setState({ done: saved });
+    this.source =
+      opts.mode === 'live'
+        ? new LiveSource({
+            onConnection: connection => useCosmos.setState({ connection }),
+            onHello: s => useCosmos.setState({ host: s.host, caps: [...s.caps] }),
+          })
+        : new MockSource({ seed: opts.seed ?? (Date.now() & 0x7fffffff), done: saved });
+    this.world = this.source.world;
+    useCosmos.setState({
+      ...initialCosmosState,
+      done: saved,
+      mode: opts.mode,
+      readOnly: this.source.readOnly,
+      connection: opts.mode === 'live' ? 'connecting' : null,
+    });
 
     // a fresh canvas per mount: a context that was force-lost cannot be reused
     this.canvas = document.createElement('canvas');
@@ -36,7 +53,10 @@ export class CosmosController {
     this.canvas.setAttribute('aria-label', 'A 3D star system where planets are Linux processes');
     this.canvas.setAttribute('role', 'img');
     host.prepend(this.canvas);
-    this.view = createCosmosView(this.canvas, this.world, { reduced: opts.reduced });
+    this.view = createCosmosView(this.canvas, this.world, {
+      reduced: opts.reduced,
+      bubbleLabel: this.source.kind === 'live' ? 'containers · PID namespaces' : undefined,
+    });
 
     this.sound = createSoundscape();
     this.offs.push(attachCosmosSound(this.world, this.sound));
@@ -46,7 +66,7 @@ export class CosmosController {
     let uiT = 0;
     this.loop = createLoop({
       hz: 50,
-      step: dt => step(this.world, dt),
+      step: dt => this.source.step(dt),
       render: (_alpha, realDt, simDt) => {
         this.view.render(realDt, simDt);
         this.sound.pad(realDt);
@@ -58,6 +78,7 @@ export class CosmosController {
       },
     });
     this.loop.start();
+    this.source.start();
 
     const onResize = () => this.view.resize();
     window.addEventListener('resize', onResize);
@@ -67,7 +88,7 @@ export class CosmosController {
       (window as unknown as { __cosmos?: unknown }).__cosmos = {
         world: this.world,
         cmd: (c: Command) => this.cmd(c),
-        step: (sec: number) => record(this.world, sec).length,
+        step: (sec: number) => (this.source.kind === 'mock' ? record(this.world, sec).length : 0),
       };
       this.offs.push(() => delete (window as unknown as { __cosmos?: unknown }).__cosmos);
     }
@@ -75,7 +96,12 @@ export class CosmosController {
   }
 
   cmd(c: Command) {
-    return command(this.world, c);
+    return this.source.command(c);
+  }
+
+  /** Live host details, or null in the Sandbox. */
+  get live(): LiveState | null {
+    return this.source instanceof LiveSource ? this.source.state : null;
   }
 
   select(pid: number | null) {
@@ -88,6 +114,7 @@ export class CosmosController {
   }
 
   fork(pid: number) {
+    if (this.source.readOnly) return;
     const child = this.cmd({ type: 'fork', pid });
     if (typeof child === 'number') this.select(child);
   }
@@ -97,6 +124,7 @@ export class CosmosController {
   }
 
   dropSyscalls() {
+    if (this.source.readOnly) return;
     this.cmd({ type: 'dropSyscalls' });
     this.sound.bubble();
   }
@@ -193,6 +221,7 @@ export class CosmosController {
 
   dispose() {
     this.loop.stop();
+    this.source.stop();
     this.offs.forEach(off => off());
     this.offs = [];
     this.sound.dispose();

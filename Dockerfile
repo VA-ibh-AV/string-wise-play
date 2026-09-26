@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# optional override of the Live stream (default wss://live.string-wise.com/stream)
+ARG VITE_LIVE_URL
+ENV VITE_LIVE_URL=$VITE_LIVE_URL
 RUN npm test && npm run build
 
 FROM nginx:1.27-alpine
