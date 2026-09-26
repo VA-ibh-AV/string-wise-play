@@ -1,0 +1,1629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kernel Cosmos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* One deliberate look: a quiet star system at night. */
+  :root {
+    color-scheme: dark;
+    --deep: #04040E;
+    --glass: rgba(12, 12, 34, 0.7);
+    --glass-edge: rgba(180, 186, 255, 0.18);
+    --text: #ECEEFA;
+    --muted: #A3A8CC;
+    --faint: #6D7299;
+    --sun: #FFE7A8;
+    --run: #9EF0B8;
+    --sleep: #8FC3FF;
+    --disk: #FFB38A;
+    --zombie: #C9C2D6;
+    --stop: #B7C4E0;
+    --rt: #FF8A7A;
+    --cache: #8FB8FF;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; background: var(--deep); color: var(--text); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+  .tank { position: relative; height: 100%; min-height: 560px; overflow: hidden; background: linear-gradient(#120F33, #020309); }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #gl.dragging { cursor: grabbing; }
+  #gl.hovering { cursor: pointer; }
+
+  .panel { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 12px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  code, .mono { font-family: var(--mono); }
+
+  .title { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; padding: 10px 16px; max-width: min(340px, calc(100% - 32px)); pointer-events: none; }
+  .title h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 23px; letter-spacing: -0.01em; line-height: 1.1; }
+  .title p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+
+  .tools { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 380px); }
+  button { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--text); background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 999px; padding: 7px 13px; cursor: pointer; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background .2s, border-color .2s, color .2s; }
+  button:hover:not(:disabled) { background: rgba(30, 30, 80, 0.85); border-color: rgba(180, 186, 255, 0.45); }
+  button:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button[aria-pressed="true"] { border-color: var(--sun); color: var(--sun); }
+
+  /* right column: process card / missions */
+  .side { position: absolute; right: 16px; top: 64px; width: 336px; max-height: calc(100% - 150px); overflow-y: auto; padding: 16px; display: grid; gap: 12px; }
+  .head { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 7px; box-shadow: 0 0 12px currentColor; background: currentColor; }
+  .side h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1.15; word-break: break-word; }
+  .ids { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .close { padding: 3px 10px; font-size: 12px; }
+  .state { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .pill { font-family: var(--mono); font-size: 12px; font-weight: 500; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .state span:last-child { color: var(--muted); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stats div { background: rgba(180, 186, 255, 0.07); border-radius: 8px; padding: 5px 8px; min-width: 0; }
+  .stats b { display: block; font-family: var(--mono); font-weight: 500; font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stats span { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .about { margin: 0; color: #CFD2EC; font-size: 13.5px; }
+  .side h3, .lens h4 { margin: 0 0 5px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  .mono-list { margin: 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 11.5px; display: grid; gap: 2px; }
+  .mono-list li { display: flex; justify-content: space-between; gap: 10px; }
+  .mono-list li span:last-child { color: var(--faint); text-align: right; }
+  .mono-list.fd li span { color: #D8DBF5; text-align: left; word-break: break-all; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .actions button { font-family: var(--mono); font-weight: 500; font-size: 11.5px; padding: 5px 10px; }
+  .actions button.warn { border-color: rgba(255, 138, 122, .45); }
+  .hint { color: var(--muted); font-size: 12px; margin: 0; }
+  .cmds { display: grid; gap: 4px; }
+  .cmd { display: block; width: 100%; text-align: left; font-family: var(--mono); font-weight: 400; font-size: 11.5px; color: #D8DBF5; background: rgba(0, 0, 0, .28); border: 1px solid rgba(180, 186, 255, .1); border-radius: 6px; padding: 5px 8px; white-space: nowrap; overflow-x: auto; backdrop-filter: none; }
+  .cmd::before { content: "$ "; color: var(--faint); }
+
+  /* missions */
+  .mlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .mlist li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 7px 8px; border-radius: 8px; background: rgba(180, 186, 255, 0.05); }
+  .mlist li.done { background: rgba(158, 240, 184, 0.07); }
+  .mlist .ck { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--faint); margin-top: 2px; }
+  .mlist li.done .ck { background: var(--run); border-color: var(--run); box-shadow: 0 0 8px rgba(158,240,184,.6); }
+  .mlist b { font-weight: 600; font-size: 13.5px; display: block; }
+  .mlist small { color: var(--muted); font-size: 12px; display: block; line-height: 1.4; }
+  .mlist .learn { color: #CFE9D8; }
+
+  /* left: lens panel */
+  .lens { position: absolute; left: 16px; top: 118px; width: 330px; padding: 14px 16px; display: grid; gap: 10px; max-height: calc(100% - 190px); overflow-y: auto; }
+  .lens h3 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 18px; }
+  .lens p { margin: 0; color: #C9CCE6; font-size: 12.8px; }
+  .rq { display: grid; gap: 4px; font-family: var(--mono); font-size: 11.5px; }
+  .rq .r { display: grid; grid-template-columns: 1fr 56px 46px; gap: 8px; align-items: center; }
+  .rq .r .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 6px; background: rgba(180,186,255,.12); border-radius: 3px; overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .rq .c { text-align: right; color: var(--sun); }
+  .rq .c.w { color: var(--faint); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-family: var(--mono); font-size: 11.5px; }
+  .kv span:nth-child(odd) { color: var(--faint); }
+  table.t { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  table.t th { color: var(--faint); font-weight: 500; text-align: right; padding: 2px 4px; }
+  table.t td { text-align: right; padding: 2px 4px; border-top: 1px solid rgba(180,186,255,.08); }
+  table.t th:first-child, table.t td:first-child { text-align: left; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .dmesg { font-family: var(--mono); font-size: 11px; color: #E9C6B8; display: grid; gap: 2px; }
+  .lens .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lens .row button { font-size: 12px; padding: 6px 11px; }
+
+  /* bottom bar */
+  .bottom { position: absolute; left: 16px; right: 16px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; pointer-events: none; }
+  .bottom > * { pointer-events: auto; }
+  .htop { padding: 7px 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); max-width: 100%; }
+  .htop b { color: var(--text); font-weight: 500; }
+  .dock { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; padding: 6px; }
+  .dock button { font-size: 12.5px; padding: 6px 12px; }
+  .dock .lbl { align-self: center; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 0 4px 0 6px; }
+  .fact { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(118px + env(safe-area-inset-bottom, 0px)); width: min(600px, calc(100% - 32px)); text-align: center; padding: 9px 16px; font-size: 13.5px; color: #DADCF2; transition: opacity .9s ease; pointer-events: none; }
+  .fact small { display: block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--sun); margin-bottom: 2px; }
+  .toast { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(460px, calc(100% - 32px)); padding: 12px 16px; display: grid; gap: 4px; border-color: rgba(158, 240, 184, .5); transition: opacity .5s ease, transform .5s ease; }
+  .toast small { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--run); }
+  .toast b { font-family: var(--display); font-size: 16px; }
+  .toast span { color: #D3D6EE; font-size: 13px; }
+  .tip { position: absolute; pointer-events: none; padding: 4px 9px; border-radius: 8px; font-family: var(--mono); font-size: 11.5px; background: rgba(6, 6, 20, 0.9); border: 1px solid var(--glass-edge); transform: translate(12px, -28px); white-space: nowrap; }
+  .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+  @media (max-width: 1100px) { .fact { display: none; } }
+  @media (max-width: 900px) {
+    .tools { max-width: calc(100% - 32px); top: auto; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); left: 16px; justify-content: center; }
+    .title p { display: none; }
+    .lens { top: 70px; width: auto; right: 16px; max-height: 38%; }
+    .side { left: 16px; right: 16px; width: auto; top: auto; bottom: calc(160px + env(safe-area-inset-bottom, 0px)); max-height: 44%; }
+    .dock { justify-content: center; width: 100%; }
+    .dock .lbl { display: none; }
+    .htop { font-size: 10px; width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .fact, .toast { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="tank" id="tank">
+  <canvas id="gl" aria-label="A 3D star system where planets are Linux processes"></canvas>
+
+  <div class="title panel">
+    <h1>Kernel Cosmos</h1>
+    <p>Every planet is a Linux process and its moons are threads. Tap a planet, or open a lens below.</p>
+  </div>
+
+  <div class="tools">
+    <button id="bSound" aria-pressed="false">Sound off</button>
+    <button id="bFeed">Drop syscalls</button>
+    <button id="bMissions" aria-pressed="false">Missions 0/16</button>
+  </div>
+
+  <aside class="side panel" id="card" hidden></aside>
+  <aside class="side panel" id="missions" hidden></aside>
+  <aside class="lens panel" id="lens" hidden></aside>
+
+  <div class="fact panel" id="fact"><small>Did you know</small><span id="factText"></span></div>
+  <div class="toast panel" id="toast" hidden><small>Mission complete</small><b id="toastT"></b><span id="toastB"></span></div>
+
+  <div class="bottom">
+    <div class="htop panel" id="htop"></div>
+    <div class="dock panel" id="dock">
+      <span class="lbl">Lenses</span>
+      <button data-lens="sched" aria-pressed="false">Scheduler</button>
+      <button data-lens="memory" aria-pressed="false">Memory</button>
+      <button data-lens="cache" aria-pressed="false">Page cache</button>
+      <button data-lens="irq" aria-pressed="false">Interrupts</button>
+      <button data-lens="cgroups" aria-pressed="false">Cgroups</button>
+      <button data-lens="conns" aria-pressed="false">Connections</button>
+      <button data-lens="ns" aria-pressed="false">Namespaces</button>
+    </div>
+  </div>
+  <div class="tip" id="tip" hidden></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const tankEl = $('tank'), canvas = $('gl');
+  if (!window.THREE) { tankEl.insertAdjacentHTML('beforeend', '<div class="fallback">The 3D library could not load. Check your connection and reload.</div>'); return; }
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); }
+  catch (e) { tankEl.insertAdjacentHTML('beforeend', '<div class="fallback">This browser has WebGL turned off, so the star system cannot render.</div>'); return; }
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const V3 = THREE.Vector3;
+  const lin = c => new THREE.Color(c).convertSRGBToLinear();
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // =====================================================================
+  // Scene
+  // =====================================================================
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  const scene = new THREE.Scene();
+  {
+    const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#120F33'); gr.addColorStop(0.5, '#070819'); gr.addColorStop(1, '#020309');
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; scene.background = tex;
+  }
+  scene.fog = new THREE.FogExp2(lin(0x05061A), 0.006);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 600);
+  scene.add(new THREE.HemisphereLight(0xB8C4FF, 0x120A20, 0.32));
+  const sun = new THREE.DirectionalLight(0xFFE2B8, 1.25); sun.position.set(-30, 14, 18); scene.add(sun);
+  const rimLight = new THREE.DirectionalLight(0x6F7BFF, 0.35); rimLight.position.set(25, -6, -20); scene.add(rimLight);
+  scene.add(new THREE.AmbientLight(0x1A1A3A, 0.4));
+
+  const TW = 44, TD = 24, FLOOR = -11, SURF = 11;
+  const ADD = THREE.AdditiveBlending;
+
+  const softTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const r = g.createRadialGradient(64, 64, 4, 64, 64, 64); r.addColorStop(0, 'rgba(255,255,255,0.8)'); r.addColorStop(0.3, 'rgba(255,255,255,0.25)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+
+  // text sprites
+  const texCache = new Map();
+  function textTexture(text, color, weight = 500) {
+    const key = text + color + weight; if (texCache.has(key)) return texCache.get(key);
+    const c = document.createElement('canvas'), g = c.getContext('2d');
+    g.font = `${weight} 30px "JetBrains Mono", ui-monospace, monospace`;
+    const w = Math.ceil(g.measureText(text).width) + 24; c.width = w; c.height = 48;
+    g.font = `${weight} 30px "JetBrains Mono", ui-monospace, monospace`;
+    g.fillStyle = color; g.textBaseline = 'middle'; g.fillText(text, 12, 25);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.minFilter = THREE.LinearFilter;
+    const r = { t, aspect: w / 48 }; texCache.set(key, r); return r;
+  }
+  function textSprite(text, color, h = 0.7, weight = 500) {
+    const { t, aspect } = textTexture(text, color, weight);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, fog: false }));
+    s.scale.set(h * aspect, h, 1); return s;
+  }
+  function glowSprite(color, size, op) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: lin(color), transparent: true, opacity: op, blending: ADD, depthWrite: false, fog: false }));
+    s.scale.setScalar(size); return s;
+  }
+
+  // stars + nebulae
+  {
+    const N = 2600, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+    const tints = [lin(0xFFFFFF), lin(0xCFD8FF), lin(0xFFE7C4), lin(0xB9C8FF)];
+    for (let i = 0; i < N; i++) {
+      const v = new V3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(160, 280));
+      pos.set([v.x, v.y, v.z], i * 3);
+      const t = pick(tints).clone().multiplyScalar(rnd(0.35, 1)); col.set([t.r, t.g, t.b], i * 3);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, fog: false, transparent: true, opacity: 0.95 })));
+  }
+  [[-120, 40, -170, 0x6B3FA0, 190], [140, -30, -150, 0x1F6F8B, 170], [20, 90, -220, 0x9B3F6B, 150], [-60, -80, 160, 0x2E4AA0, 200]].forEach(([x, y, z, c, sc]) => {
+    const sp = glowSprite(c, sc, 0.32); sp.position.set(x, y, z); scene.add(sp);
+  });
+
+  // disk station
+  const rocks = [];
+  const rockMat = new THREE.MeshStandardMaterial({ color: lin(0x6A6272), roughness: 0.95, flatShading: true });
+  const DISK = new V3(-15, -6.5, -5);
+  {
+    const core = new THREE.Mesh(new THREE.DodecahedronGeometry(2.2, 1), new THREE.MeshStandardMaterial({ color: lin(0x5C5566), roughness: 0.9, flatShading: true, emissive: lin(0xFF9A5C), emissiveIntensity: 0.06 }));
+    core.position.copy(DISK); scene.add(core); rocks.push({ m: core, sp: new V3(0.05, 0.12, 0.03) });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.05, 8, 96), new THREE.MeshBasicMaterial({ color: lin(0xFFB38A), transparent: true, opacity: 0.55 }));
+    ring.position.copy(DISK); ring.rotation.x = Math.PI / 2.3; scene.add(ring); rocks.push({ m: ring, sp: new V3(0, 0, 0.15) });
+    const l = textSprite('/dev/nvme0n1 · disk', '#FFB38A', 0.95); l.position.set(DISK.x, DISK.y + 3.4, DISK.z); scene.add(l);
+  }
+  for (let i = 0; i < 16; i++) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(rnd(0.25, 0.9), 0), rockMat);
+    const a = rnd(0, 6.28), rr = rnd(24, 34);
+    m.position.set(Math.cos(a) * rr, rnd(-9, 9), Math.sin(a) * rr * 0.7); m.rotation.set(rnd(0, 3), rnd(0, 3), rnd(0, 3)); m.scale.set(1.3, 0.85, 1);
+    scene.add(m); rocks.push({ m, sp: new V3(rnd(-0.3, 0.3), rnd(-0.3, 0.3), rnd(-0.3, 0.3)) });
+  }
+
+  // page cache nebula
+  const CACHE_POS = new V3(-9, -1, -9);
+  const nebula = new THREE.Group(); nebula.position.copy(CACHE_POS); scene.add(nebula);
+  const nebSprites = [[0, 0, 0, 0x8FB8FF], [1.2, 0.6, 0.4, 0xB08FFF], [-1, -0.4, 0.6, 0x7FD8FF], [0.3, -0.8, -0.8, 0x9FA8FF]].map(([x, y, z, c]) => { const s = glowSprite(c, 6, 0.3); s.position.set(x, y, z); nebula.add(s); return s; });
+  const nebLabel = textSprite('page cache', '#8FB8FF', 0.7); scene.add(nebLabel);
+
+  // NIC satellite
+  const NIC = new V3(19, 2, -7);
+  {
+    const g = new THREE.Group(); g.position.copy(NIC); scene.add(g);
+    const metal = new THREE.MeshStandardMaterial({ color: lin(0xB9BFD6), roughness: 0.5, metalness: 0.6 });
+    const panel = new THREE.MeshStandardMaterial({ color: lin(0x2A3F8F), roughness: 0.4, metalness: 0.3, emissive: lin(0x1A2A6A), emissiveIntensity: 0.4 });
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.6), metal));
+    for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 1.1), panel); p.position.x = s * 2.1; g.add(p); }
+    const dish = new THREE.Mesh(new THREE.ConeGeometry(0.8, 0.5, 20, 1, true), metal); dish.position.set(0, 0.9, 0); dish.rotation.x = Math.PI; g.add(dish);
+    const blink = glowSprite(0x7FF0FF, 1.2, 0.8); blink.position.set(0, 0.2, 0.9); g.add(blink); g.userData.blink = blink;
+    rocks.push({ m: g, sp: new V3(0, 0.1, 0) });
+    const l = textSprite('eth0 · NIC', '#7FF0FF', 0.8); l.position.set(NIC.x, NIC.y + 2, NIC.z); scene.add(l);
+    var nicBlink = blink;
+  }
+
+  // dust (also used for bursts)
+  const BUB = 320;
+  const bubPos = new Float32Array(BUB * 3), bubVel = new Float32Array(BUB * 3);
+  function resetBubble(i) {
+    bubPos[i*3] = rnd(-TW / 2 - 6, TW / 2 + 6); bubPos[i*3+1] = rnd(FLOOR - 4, SURF + 4); bubPos[i*3+2] = rnd(-TD / 2 - 6, TD / 2 + 6);
+    bubVel[i*3] = rnd(-0.25, 0.25); bubVel[i*3+1] = rnd(-0.12, 0.12); bubVel[i*3+2] = rnd(-0.25, 0.25);
+  }
+  for (let i = 0; i < BUB; i++) resetBubble(i);
+  const bubGeo = new THREE.BufferGeometry(); bubGeo.setAttribute('position', new THREE.BufferAttribute(bubPos, 3));
+  scene.add(new THREE.Points(bubGeo, new THREE.PointsMaterial({ size: 0.22, map: softTex, color: lin(0xC9D2FF), transparent: true, depthWrite: false, opacity: 0.7, blending: ADD })));
+  function burst(pos, n = 24, speed = 4) {
+    for (let i = 0; i < n; i++) { const b = Math.floor(Math.random() * BUB); bubPos[b*3] = pos.x; bubPos[b*3+1] = pos.y; bubPos[b*3+2] = pos.z; const d = new V3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(speed * 0.4, speed)); bubVel[b*3] = d.x; bubVel[b*3+1] = d.y; bubVel[b*3+2] = d.z; }
+  }
+
+  // CPU stars + beams
+  const beamTex = (() => { const c = document.createElement('canvas'); c.width = 2; c.height = 128; const g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0.05)');
+    g.fillStyle = gr; g.fillRect(0, 0, 2, 128); return new THREE.CanvasTexture(c); })();
+  const NCPU = 4, SUN_C = lin(0xFFE7A8), RT_C = lin(0xFF8A7A);
+  const cpus = [];
+  for (let i = 0; i < NCPU; i++) {
+    const geo = new THREE.CylinderGeometry(0.5, 1.9, 1, 28, 1, true); geo.translate(0, -0.5, 0);
+    const beam = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xFFE7A8, map: beamTex, transparent: true, opacity: 0, blending: ADD, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    const x0 = -12 + i * 8; beam.position.set(x0, SURF, 0); scene.add(beam);
+    const label = textSprite(`CPU${i}`, '#FFE7A8', 0.62); scene.add(label);
+    const star = glowSprite(0xFFE7A8, 2.4, 0.5); scene.add(star);
+    cpus.push({ i, beam, label, star, proc: null, x: x0, z: 0, len: 4, op: 0, flash: 0 });
+  }
+
+  // line pools (cgroups, connections, COW links)
+  function linePool(color, n) {
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: lin(color), transparent: true, opacity: 0, blending: ADD, depthWrite: false }));
+      l.frustumCulled = false; scene.add(l); arr.push(l);
+    }
+    return arr;
+  }
+  function setLine(l, a, b, op, color) {
+    const p = l.geometry.attributes.position.array; p[0] = a.x; p[1] = a.y; p[2] = a.z; p[3] = b.x; p[4] = b.y; p[5] = b.z;
+    l.geometry.attributes.position.needsUpdate = true; l.material.opacity = op; if (color) l.material.color.copy(color);
+  }
+  const cgLines = linePool(0xFFE7A8, 24), connLines = linePool(0x7FF0FF, 14), cowLines = linePool(0xFFFFFF, 8);
+
+  // namespace bubble
+  const nsCenter = new V3(9, 0, 5);
+  const bubble = new THREE.Group(); scene.add(bubble);
+  const bubMat = new THREE.MeshBasicMaterial({ color: lin(0x9FF0D0), transparent: true, opacity: 0.03, depthWrite: false });
+  const bubRim = new THREE.MeshBasicMaterial({ color: lin(0x9FF0D0), transparent: true, opacity: 0.08, side: THREE.BackSide, depthWrite: false, blending: ADD });
+  bubble.add(new THREE.Mesh(new THREE.SphereGeometry(6.4, 40, 28), bubMat));
+  { const r = new THREE.Mesh(new THREE.SphereGeometry(6.55, 40, 28), bubRim); bubble.add(r); }
+  const bubLabel = textSprite('pod: checkout · PID namespace', '#9FF0D0', 0.7); bubLabel.position.set(0, 7.3, 0); bubble.add(bubLabel);
+
+  // black hole (OOM killer)
+  const hole = new THREE.Group(); hole.visible = false; scene.add(hole);
+  hole.add(new THREE.Mesh(new THREE.SphereGeometry(1.4, 32, 24), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+  const disc = new THREE.Mesh(new THREE.RingGeometry(1.7, 4.2, 96), new THREE.MeshBasicMaterial({ color: lin(0xFF9A4A), transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: ADD, depthWrite: false }));
+  disc.rotation.x = Math.PI / 2.4; hole.add(disc);
+  const holeGlow = glowSprite(0xFF7A3A, 9, 0.35); hole.add(holeGlow);
+  const holeLabel = textSprite('OOM killer', '#FFB38A', 0.8); holeLabel.position.set(0, 3.2, 0); hole.add(holeLabel);
+
+  // memory page tiles (for the selected process)
+  const TILE_N = 40;
+  const tiles = new THREE.Group(); tiles.visible = false; scene.add(tiles);
+  const TILE_GEO = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+  const tileMats = [];
+  for (let i = 0; i < TILE_N; i++) {
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    const t = new THREE.Mesh(TILE_GEO, m); tiles.add(t); tileMats.push(m);
+  }
+
+  // =====================================================================
+  // Processes
+  // =====================================================================
+  const SYS = {
+    epoll_wait:    { block: 'S', dur: [2, 6], note: 'sleep until one of many sockets is ready' },
+    futex:         { block: 'S', dur: [1, 4], note: 'park the thread until a lock frees up' },
+    nanosleep:     { block: 'S', dur: [3, 8], note: 'sleep for a fixed amount of time' },
+    recvfrom:      { block: 'S', dur: [1.5, 4], note: 'wait for data to arrive on a socket' },
+    wait4:         { block: 'S', dur: [4, 9], note: 'wait for a child process to exit' },
+    pread64:       { block: 'D', dur: [1.5, 3], note: 'read a file at an offset (page cache or disk)' },
+    fsync:         { block: 'D', dur: [2, 3.5], note: 'wait until written data is safely on disk' },
+    read:          { note: 'copy bytes in from a file or socket' },
+    write:         { note: 'copy bytes out to a file or socket' },
+    sendto:        { note: 'hand data to the network stack' },
+    accept4:       { note: 'take a new connection off the listen queue' },
+    openat:        { note: 'open a file and get a file descriptor' },
+    mmap:          { note: 'map more memory into the address space' },
+    clock_gettime: { note: 'read the clock via the vDSO, often without entering the kernel' },
+    clone:         { note: 'create a new process or thread' }
+  };
+  const SYS_NAMES = Object.keys(SYS);
+  const SYS_COLOR = n => SYS[n].block === 'D' ? '#FFB38A' : SYS[n].block === 'S' ? '#8FC3FF' : '#FFE7A8';
+
+  const PROCS_DEF = [
+    { pid: 1, ppid: 0, comm: 'systemd', user: 'root', color: 0xF0C36A, rss: 12, vsz: 170, thr: 1, kind: 'daemon', service: 'init.scope', main: true, sys: ['epoll_wait', 'openat', 'read'], busy: 0.15,
+      fds: ['3 anon_inode:[eventpoll]', '9 socket:[/run/systemd/notify]'],
+      about: 'PID 1, the init system. It starts every service, restarts the ones that die, and adopts orphaned processes. If PID 1 ever exits, the kernel panics.' },
+    { pid: 14, ppid: 2, comm: 'ksoftirqd/0', user: 'root', color: 0x8AA0B8, rss: 0, vsz: 0, thr: 1, kind: 'kernel', sys: ['nanosleep'], busy: 0.2, fds: [],
+      about: 'A kernel thread that finishes network and timer work (softirqs) when interrupts arrive faster than they can be handled inline.' },
+    { pid: 142, ppid: 2, comm: 'kworker/1:2', user: 'root', color: 0x8AA0B8, rss: 0, vsz: 0, thr: 1, kind: 'kernel', sys: ['nanosleep'], busy: 0.2, fds: [],
+      about: 'A kernel worker thread. It runs deferred kernel jobs such as flushing dirty pages to disk. Kernel threads have no user-space memory.' },
+    { pid: 412, ppid: 1, comm: 'sshd', user: 'root', color: 0xC7A4FF, rss: 8, vsz: 15, thr: 1, kind: 'daemon', service: 'ssh.service', main: true, sys: ['recvfrom', 'write', 'accept4'], busy: 0.1,
+      fds: ['3 socket:[TCP *:22 LISTEN]', '4 socket:[TCP 10.0.0.4:22 → you]', '5 /dev/ptmx'], about: 'The SSH server. It sleeps almost all the time and wakes only when you type.' },
+    { pid: 780, ppid: 1, comm: 'containerd', user: 'root', color: 0xE8A06A, rss: 64, vsz: 1900, thr: 12, kind: 'daemon', service: 'containerd.service', main: true, sys: ['futex', 'epoll_wait', 'read'], busy: 0.3,
+      fds: ['3 /run/containerd/containerd.sock', '7 /var/lib/containerd/meta.db'], about: 'The container runtime. A Go program with many OS threads that the Go scheduler runs goroutines on.' },
+    { pid: 901, ppid: 1, comm: 'nginx: master', user: 'root', color: 0x7FD1B9, rss: 6, vsz: 55, thr: 1, kind: 'daemon', service: 'nginx.service', main: true, sys: ['wait4'], busy: 0.05,
+      fds: ['6 socket:[TCP *:443 LISTEN]', '7 /var/log/nginx/error.log'], about: 'The nginx master. It opens the listen socket, forks the workers, and forks a replacement if a worker dies.' },
+    ...[0, 1, 2, 3].map(i => ({ pid: 902 + i, ppid: 901, comm: 'nginx: worker', user: 'www-data', color: 0x9BE3CB, rss: 11, vsz: 58, thr: 1, kind: 'app', service: 'nginx.service', sys: ['epoll_wait', 'accept4', 'recvfrom', 'sendto', 'write'], busy: 0.55,
+      fds: ['6 socket:[TCP *:443 LISTEN] (inherited)', `${20 + i} socket:[TCP → client]`, `${30 + i} socket:[TCP → checkout-api:8080]`],
+      about: 'An nginx worker: a separate forked process, not a thread. One event loop watches thousands of connections with epoll.' })),
+    { pid: 1320, ppid: 1, comm: 'postgres', user: 'postgres', color: 0x6FA8FF, rss: 140, vsz: 220, thr: 1, kind: 'daemon', service: 'postgresql.service', main: true, sys: ['epoll_wait', 'accept4'], busy: 0.1,
+      fds: ['5 socket:[TCP *:5432 LISTEN]', '6 /var/lib/postgresql/16/main/postmaster.pid'], about: 'The postmaster. PostgreSQL forks one backend process per client connection, so each client gets its own planet.' },
+    ...['app checkout idle', 'app checkout SELECT', 'walwriter'].map((n, i) => ({ pid: 1333 + i * 7, ppid: 1320, comm: 'postgres: ' + n, user: 'postgres', color: 0x93BEFF, rss: 38, vsz: 225, thr: 1, kind: 'app', service: 'postgresql.service',
+      sys: n === 'walwriter' ? ['fsync', 'write', 'nanosleep'] : ['recvfrom', 'pread64', 'sendto', 'mmap'], busy: 0.45,
+      fds: ['9 /var/lib/postgresql/16/main/base/16384/2619', '10 /var/lib/postgresql/16/main/pg_wal/000000010000000A', '11 socket:[TCP → checkout-api]'],
+      about: n === 'walwriter' ? 'Writes the write-ahead log and calls fsync, so it often waits in state D.' : 'A backend for one client connection. Table reads go through the page cache, and a cache miss waits on disk in state D.' })),
+    { pid: 1455, ppid: 1, comm: 'redis-server', user: 'redis', color: 0xFF7A68, rss: 90, vsz: 160, thr: 5, kind: 'app', service: 'redis.service', main: true, sys: ['epoll_wait', 'read', 'write'], busy: 0.6,
+      fds: ['6 socket:[TCP *:6379 LISTEN]', '8 /var/lib/redis/dump.rdb'], about: 'Redis runs commands on one main thread with an event loop. Its dataset lives in RAM, which makes it a big planet.' },
+    { pid: 1602, ppid: 1, comm: 'node_exporter', user: 'nobody', color: 0xB6E07A, rss: 22, vsz: 730, thr: 7, kind: 'daemon', service: 'node-exporter.service', main: true, sys: ['openat', 'read', 'futex'], busy: 0.25,
+      fds: ['3 /proc/stat', '4 /proc/meminfo', '7 socket:[TCP *:9100 LISTEN]'], about: 'Exports metrics by reading files in /proc. Every CPU and memory graph you have seen starts with reads like these.' },
+    { pid: 2210, ppid: 780, comm: 'checkout-api', user: 'app', color: 0x5FD4E8, rss: 220, vsz: 1600, thr: 11, kind: 'app', service: 'kubepods/checkout', main: true, ns: 'checkout', nsPid: 1, sys: ['futex', 'epoll_wait', 'write', 'sendto', 'nanosleep', 'clock_gettime'], busy: 0.7,
+      fds: ['3 socket:[TCP *:8080 LISTEN]', '7 socket:[TCP → postgres:5432]', '8 socket:[TCP → redis:6379]'],
+      about: 'A Go service in a container. Inside its PID namespace it believes it is PID 1. Goroutines are parked with futex and run on a small pool of OS threads.' },
+    { pid: 2231, ppid: 780, comm: 'envoy', user: 'app', color: 0xE7B4FF, rss: 30, vsz: 2100, thr: 4, kind: 'app', service: 'kubepods/checkout', main: true, ns: 'checkout', nsPid: 12, sys: ['epoll_wait', 'sendto', 'recvfrom'], busy: 0.4,
+      fds: ['5 socket:[TCP *:15001 LISTEN]', '9 socket:[TCP → checkout-api:8080]'],
+      about: 'A sidecar proxy in the same pod. It shares the pod\'s PID and network namespaces with checkout-api, so they see each other and talk over localhost.' },
+    { pid: 3001, ppid: 1, comm: 'cron', user: 'root', color: 0xA8B3C4, rss: 3, vsz: 8, thr: 1, kind: 'daemon', service: 'cron.service', main: true, sys: ['nanosleep', 'clone'], busy: 0.08,
+      fds: ['3 /var/run/crond.pid', '4 /etc/crontab'], about: 'Wakes to check the schedule. When a job is due it calls clone() to fork a child, then reaps it with wait4().' }
+  ];
+  const CONNS = [['nginx: worker', 'envoy'], ['envoy', 'checkout-api'], ['checkout-api', 'postgres: app checkout SELECT'], ['checkout-api', 'postgres: app checkout idle'], ['checkout-api', 'redis-server']];
+
+  // planet construction
+  const MEM_GEO = new THREE.SphereGeometry(1, 36, 24);
+  const NUC_GEO = new THREE.SphereGeometry(0.68, 48, 32);
+  const ORG_GEO = new THREE.SphereGeometry(0.12, 14, 10);
+  const RING_GEO = new THREE.RingGeometry(0.95, 1.45, 72);
+  const planetTex = new Map();
+  function bandTexture(color, seed) {
+    const key = color + ':' + seed; if (planetTex.has(key)) return planetTex.get(key);
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d');
+    const base = new THREE.Color(color);
+    for (let y = 0; y < 128; y++) {
+      const n = Math.sin(y * 0.19 + seed) * 0.5 + Math.sin(y * 0.53 + seed * 2.1) * 0.3 + Math.sin(y * 1.7 + seed * 0.7) * 0.12;
+      const k = 0.72 + n * 0.28;
+      g.fillStyle = `rgb(${Math.min(255, base.r * 255 * k) | 0},${Math.min(255, base.g * 255 * k) | 0},${Math.min(255, base.b * 255 * k) | 0})`;
+      g.fillRect(0, y, 256, 1);
+    }
+    for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(255,255,255,${rnd(0.02, 0.07)})`; g.beginPath(); g.ellipse(rnd(0, 256), rnd(0, 128), rnd(8, 40), rnd(1, 4), 0, 0, 6.28); g.fill(); }
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; planetTex.set(key, t); return t;
+  }
+  const pickables = [];
+  function makePlanet(color, size, proc, threads) {
+    const base = lin(color);
+    const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+    const mat = new THREE.MeshStandardMaterial({ color: base, emissive: base, emissiveIntensity: 0.2, transparent: true, opacity: 0.08, depthWrite: false });
+    const mem = new THREE.Mesh(MEM_GEO, mat); mem.renderOrder = 2; body.add(mem);
+    const rimMat = new THREE.MeshBasicMaterial({ color: base, transparent: true, opacity: 0.2, side: THREE.BackSide, depthWrite: false, blending: ADD });
+    const rim = new THREE.Mesh(MEM_GEO, rimMat); rim.scale.setScalar(0.86); body.add(rim);
+    const nucMat = new THREE.MeshStandardMaterial({ map: bandTexture(color, proc.pid % 7), color: 0xFFFFFF, emissive: base, emissiveIntensity: 0.1, roughness: 0.85, metalness: 0, transparent: true, opacity: 1 });
+    const nuc = new THREE.Mesh(NUC_GEO, nucMat); nuc.rotation.z = rnd(-0.4, 0.4); body.add(nuc);
+    let ring = null;
+    if (proc.rss >= 100) {
+      ring = new THREE.Mesh(RING_GEO, new THREE.MeshBasicMaterial({ color: lin(0xFFFFFF).lerp(base, 0.6), transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = Math.PI / 2 - 0.35; ring.rotation.y = 0.2; body.add(ring);
+    }
+    const orgMat = new THREE.MeshStandardMaterial({ color: lin(0xE8E4F0).lerp(base, 0.25), roughness: 0.9, transparent: true, opacity: 1, emissive: base, emissiveIntensity: 0.15 });
+    const orgs = []; const tilt = rnd(-0.5, 0.5);
+    for (let i = 0; i < Math.min(threads - 1, 12); i++) {
+      const m = new THREE.Mesh(ORG_GEO, orgMat); m.scale.setScalar(rnd(0.7, 1.3)); body.add(m);
+      orgs.push({ m, ang: rnd(0, 6.28), spd: rnd(0.5, 1.1), r: 1.12 + i * 0.07 + rnd(0, 0.05), axis: new V3(1, 0, 0), tilt: tilt + rnd(-0.25, 0.25) });
+    }
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: base, transparent: true, opacity: 0.2, blending: ADD, depthWrite: false }));
+    halo.scale.setScalar(3.4); body.add(halo);
+    g.scale.setScalar(size);
+    mem.userData.proc = proc; pickables.push(mem);
+    scene.add(g);
+    return { g, body, mem, mat, rimMat, nuc, nucMat, orgMat, orgs, halo, ring, size, base, vel: new V3(rnd(-1, 1), 0, rnd(-1, 1)), target: new V3(), retarget: 0, ph: rnd(0, 6.28), squish: 0, scale: size };
+  }
+
+  const procs = [];
+  let nextPid = 3100;
+  const byPid = pid => procs.find(q => q.pid === pid);
+  function randomPoint(yMin = FLOOR + 2.5, yMax = SURF - 2) { return new V3(rnd(-TW / 2 + 3, TW / 2 - 3), rnd(yMin, yMax), rnd(-TD / 2 + 3, TD / 2 - 3)); }
+  function sizeFor(p) { return (p.kind === 'kernel' ? 0.5 : 0.72 + Math.log2(1 + p.rss + p.shared * 0.5) / 6.5) * (p.child ? 0.8 : 1); }
+
+  function spawnProc(def, at) {
+    const p = Object.assign({
+      nice: 0, state: 'S', vruntime: rnd(0, 40), cpu: 0, onCpu: -1, lastCpu: -1, wakeAt: rnd(0.5, 5), recent: [], dead: false, born: clock, lifeEnd: Infinity, zombieAt: 0,
+      policy: 'OTHER', affinity: null, oomAdj: 0, swapped: 0, shared: 0, minflt: Math.floor(rnd(200, 3000)), majflt: Math.floor(rnd(0, 20)), ioIrq: false, fds: []
+    }, def);
+    p.weight = 1024 / Math.pow(1.25, p.nice);
+    p.home = new V3(rnd(-18, 18), rnd(FLOOR + 2.2, FLOOR + 5.5), rnd(-9, 9));
+    p.nsOff = new V3(rnd(-3, 3), rnd(-2, 2), rnd(-3, 3));
+    p.pl = makePlanet(p.color, sizeFor(p), p, p.thr);
+    const start = at ? at.clone() : p.ns ? nsCenter.clone().add(p.nsOff) : randomPoint();
+    p.pl.g.position.copy(start); p.pl.target.copy(start);
+    procs.push(p);
+    return p;
+  }
+  function removeProc(p) {
+    p.dead = true;
+    const f = p.pl;
+    scene.remove(f.g); const i = pickables.indexOf(f.mem); if (i >= 0) pickables.splice(i, 1);
+    [f.mat, f.rimMat, f.nucMat, f.orgMat, f.halo.material].forEach(m => m.dispose()); if (f.ring) f.ring.material.dispose();
+    procs.splice(procs.indexOf(p), 1);
+    for (const c of cpus) if (c.proc === p) c.proc = null;
+    if (selected === p) select(null);
+  }
+  const posOf = p => p.pl.g.position;
+
+  // =====================================================================
+  // Simulation state
+  // =====================================================================
+  let clock = 0;
+  const uptimeBase = 41 * 86400 + 3 * 3600 + 12 * 60;
+  const RAM = 1024, SWAP = 512;
+  const MEM = { cache: 170, swapUsed: 0, hits: 0, misses: 0, kswapdT: 0 };
+  const kmsg = [];
+  function dmesg(text) { const up = (uptimeBase + clock).toFixed(3); kmsg.unshift(`[${up}] ${text}`); if (kmsg.length > 6) kmsg.pop(); }
+  const irq = { counts: [0, 1, 2, 3].map(() => ({ eth: 0, nvme: 0, loc: 0 })), netrx: 0, ksoftirqd: 0, next: 2, queue: [], recent: [] };
+  let csTotal = 0, csSec = 0, csRate = 0, csT = 0;
+  const CG_PERIOD = 4;
+  const cgState = {};
+  const cgOf = p => p.service ? (cgState[p.service] || (cgState[p.service] = { quota: Infinity, used: 0, throttled: false, nrThrottled: 0, nrPeriods: 0, usage: 0 })) : null;
+  let cgTick = 0;
+  let lens = null, nsInside = false, selected = null;
+  const restarts = [];
+  let oom = null;
+
+  const pellets = [], popups = [], sparks = [];
+  const PELLET_GEO = new THREE.IcosahedronGeometry(0.2, 1);
+  const COMET_TAIL = new THREE.ConeGeometry(0.17, 2.2, 10, 1, true); COMET_TAIL.translate(0, 1.1, 0);
+
+  function popup(text, color, pos, life = 1.8) {
+    const s = textSprite(text, color, 0.6); s.position.copy(pos); scene.add(s);
+    popups.push({ s, life });
+  }
+  const popAt = (p, text, color, up = 1.4) => popup(text, color, posOf(p).clone().add(new V3(0, up + p.pl.size, 0)));
+
+  // a glowing mote that travels from A to B (B may move)
+  function spark(from, to, color, dur, onArrive, size = 0.9, arc = 1.5) {
+    const s = glowSprite(color, size, 0.95); s.position.copy(from); scene.add(s);
+    sparks.push({ s, from: from.clone(), to, t: 0, dur, onArrive, arc });
+  }
+  const targetOf = p => () => (p.dead ? p.lastPos || posOf(p) : (p.lastPos = posOf(p).clone()));
+
+  function minVruntime() { let m = Infinity; for (const p of procs) if (p.state === 'R' && p.vruntime < m) m = p.vruntime; return m === Infinity ? 0 : m; }
+  function wake(p) {
+    if (p.state !== 'S' && p.state !== 'D') return;
+    if (p.state === 'D' && p.pendingKill) { exitProc(p, 'killed by SIGKILL (after its I/O finished)', true); return; }
+    p.state = 'R';
+    p.vruntime = Math.max(p.vruntime, minVruntime() - 6);
+  }
+  function block(p, st, dur) { p.state = st; p.wakeAt = clock + dur; p.ioIrq = false; p.onCpu = -1; }
+
+  // ---------------- syscalls ----------------
+  function dropPellet(p, name, fromFeed) {
+    const lead = posOf(p);
+    const m = new THREE.Mesh(PELLET_GEO, new THREE.MeshBasicMaterial({ color: lin(SYS_COLOR(name)), transparent: true }));
+    m.position.set(lead.x + rnd(-2, 2), SURF - 0.3, lead.z + rnd(-2, 2));
+    const label = textSprite(name + '()', SYS_COLOR(name), 0.75); label.position.set(0.9, 0.55, 0); m.add(label);
+    const tail = new THREE.Mesh(COMET_TAIL, new THREE.MeshBasicMaterial({ color: lin(SYS_COLOR(name)), transparent: true, opacity: 0.55, blending: ADD, depthWrite: false })); m.add(tail);
+    scene.add(m);
+    pellets.push({ m, label, tail, name, owner: p, vy: rnd(1.4, 2.0), ph: rnd(0, 6), landed: 0 });
+    if (fromFeed && (p.state === 'S')) wake(p);
+  }
+  function killPellet(i) { const pl = pellets[i]; scene.remove(pl.m); pl.m.material.dispose(); pl.label.material.dispose(); pl.tail.material.dispose(); pellets.splice(i, 1); }
+
+  function doSyscall(p, name, where) {
+    const def = SYS[name];
+    p.recent.unshift({ name, t: clock }); if (p.recent.length > 6) p.recent.pop();
+    Sound.plink(SYS_NAMES.indexOf(name));
+    popup(name + '()', SYS_COLOR(name), where.clone().add(new V3(0, 1.2, 0)));
+    if (name === 'clone' && p.comm === 'cron') {
+      forkProc(p, { comm: 'backup.sh', rss: 1, sys: ['openat', 'pread64', 'write', 'fsync'], about: 'A cron job forked by cron. It reads files through the page cache, exits, and waits as a zombie until cron reaps it with wait4().' });
+      return;
+    }
+    if (name === 'pread64') { fileRead(p); return; }
+    if ((name === 'sendto' || name === 'write') && Math.random() < 0.7) sendToPeer(p);
+    if (name === 'mmap' && p.comm !== 'leaky-job') p.minflt += 12;
+    if (def.block) {
+      block(p, def.block, rnd(def.dur[0], def.dur[1]));
+      if (p === selected && def.block === 'S') complete('sleep');
+    }
+  }
+
+  // page cache
+  function fileRead(p) {
+    const hitP = Math.max(0.05, Math.min(0.92, MEM.cache / 380));
+    if (Math.random() < hitP) {
+      MEM.hits++; p.minflt++;
+      spark(CACHE_POS, targetOf(p), 0x8FB8FF, 0.7, null, 0.8);
+      popAt(p, 'page cache hit', '#8FB8FF', 1);
+    } else {
+      MEM.misses++;
+      if (freeMem() > 16) MEM.cache += 8;
+      block(p, 'D', rnd(1.4, 2.6));
+      spark(DISK, targetOf(p), 0xFFB38A, 1.1, null, 0.9);
+      popAt(p, 'cache miss → disk read', '#FFB38A', 1);
+      if (lens === 'cache') complete('cachemiss');
+    }
+  }
+
+  // connections
+  function peersOf(p) {
+    const out = [];
+    for (const [a, b] of CONNS) {
+      if (p.comm === a) out.push(...procs.filter(q => q.comm === b && q.state !== 'Z'));
+      if (p.comm === b) out.push(...procs.filter(q => q.comm === a && q.state !== 'Z'));
+    }
+    return out;
+  }
+  function sendToPeer(p) {
+    const peers = peersOf(p); if (!peers.length) return;
+    const q = pick(peers);
+    spark(posOf(p), targetOf(q), 0x7FF0FF, 0.8, () => {
+      if (q.dead) return;
+      if (q.state === 'S') { wake(q); if (lens === 'conns') popAt(q, 'data ready → woken', '#7FF0FF', 1); }
+    }, lens === 'conns' ? 0.9 : 0.55, 0.6);
+  }
+
+  // ---------------- fork / exit / reap ----------------
+  function forkProc(parent, over = {}, life) {
+    const keep = ['comm', 'user', 'color', 'vsz', 'thr', 'kind', 'service', 'sys', 'busy', 'ns', 'fds', 'nice'];
+    const def = {}; keep.forEach(k => def[k] = parent[k]);
+    Object.assign(def, {
+      pid: nextPid++, ppid: parent.pid, rss: 1, shared: Math.round(parent.rss * 0.8), thr: 1, child: true, main: false,
+      nsPid: parent.ns ? 20 + Math.floor(rnd(1, 40)) : undefined,
+      fds: parent.fds.slice(0, 2).map(f => f + ' (inherited)'),
+      about: 'A fresh child made by fork(). It started as a copy of its parent and shares the parent\'s memory pages until one of them writes to a page. Then the kernel copies just that page (copy-on-write).'
+    }, over);
+    const c = spawnProc(def, posOf(parent));
+    c.state = 'R'; c.vruntime = minVruntime(); c.lifeEnd = life === undefined ? clock + rnd(16, 24) : life;
+    c.pl.g.scale.setScalar(0.01); c.pl.scale = 0.01; c.grow = 0;
+    const dir = new V3(rnd(-1, 1), rnd(-0.3, 0.3), rnd(-1, 1)).normalize();
+    parent.pl.squish = 0.35; parent.pl.vel.addScaledVector(dir, -2.5); c.pl.vel.copy(dir).multiplyScalar(4.5);
+    Sound.bubble(); setTimeout(() => Sound.bubble(), 120);
+    popAt(parent, 'fork() → ' + c.pid, '#E4F4F2');
+    return c;
+  }
+
+  function exitProc(p, reason, killed) {
+    if (p.state === 'Z' || p.dead) return;
+    p.state = 'Z'; p.zombieAt = clock; p.onCpu = -1; p.exitReason = reason; p.pendingKill = false; p.pendingTerm = false;
+    p.rssAtExit = p.rss; p.rss = 0; MEM.swapUsed = Math.max(0, MEM.swapUsed - p.swapped); p.swapped = 0; p.shared = 0;
+    popAt(p, reason + ' · <defunct>', '#C9C2D6', 1.3);
+    // orphans are adopted by PID 1
+    const kids = procs.filter(q => q.ppid === p.pid && q !== p);
+    for (const k of kids) {
+      k.ppid = 1; k.adoptUntil = clock + 7;
+      popAt(k, 'orphan → adopted by PID 1', '#F0C36A', 1);
+      complete('orphan');
+    }
+    // supervisors react
+    const parent = byPid(p.ppid);
+    if (p.comm === 'nginx: worker' && parent && parent.state !== 'Z' && killed) {
+      setTimeout(() => { if (!parent.dead && parent.state !== 'Z') { forkProc(parent, { comm: 'nginx: worker', user: 'www-data', color: 0x9BE3CB, rss: 2, shared: 8, busy: 0.55, sys: ['epoll_wait', 'accept4', 'recvfrom', 'sendto', 'write'], child: false, about: PROCS_DEF[6].about }, Infinity); popAt(parent, 'master: worker died, forking a new one', '#7FD1B9'); } }, 2500);
+    }
+    if (p.main && p.service && p.service !== 'init.scope' && killed) {
+      restarts.push({ service: p.service, at: clock + 8 });
+      popAt(p, `systemd: ${p.service} will restart in 8 s`, '#F0C36A', 2.2);
+    }
+  }
+
+  function reap(z) {
+    if (z.state !== 'Z' || z.dead) return;
+    const parent = byPid(z.ppid);
+    popAt(z, `wait4() reaped ${z.pid}`, '#C9C2D6', 1.2);
+    burst(posOf(z));
+    Sound.chime();
+    if (parent) { parent.recent.unshift({ name: 'wait4', t: clock }); if (parent.recent.length > 6) parent.recent.pop(); }
+    removeProc(z);
+  }
+
+  function restartService(name) {
+    // systemd stops whatever is left in the cgroup, then starts the unit fresh
+    const left = procs.filter(q => q.service === name && q.state !== 'Z');
+    for (const q of left) { burst(posOf(q), 12, 3); removeProc(q); }
+    if (left.length) dmesg(`systemd[1]: ${name}: killing ${left.length} leftover process(es) in control group`);
+    const defs = PROCS_DEF.filter(d => d.service === name);
+    const map = {};
+    for (const d of defs) map[d.pid] = nextPid++;
+    for (const d of defs) {
+      const nd = Object.assign({}, d, { pid: map[d.pid], ppid: map[d.ppid] || d.ppid });
+      const q = spawnProc(nd, posOf(procs[0]) );
+      q.pl.g.scale.setScalar(0.01); q.pl.scale = 0.01; q.grow = 0; q.state = 'R';
+    }
+    const sd = byPid(1); if (sd) popAt(sd, `systemd: started ${name}`, '#F0C36A');
+    dmesg(`systemd[1]: Started ${name}.`);
+  }
+
+  // ---------------- signals ----------------
+  function signal(p, sig) {
+    if (p.state === 'Z') return;
+    if (p.kind === 'kernel') { popAt(p, 'kernel threads ignore signals', '#B7C4E0'); return; }
+    if (p.pid === 1 && sig !== 'CONT') { popAt(p, `PID 1 ignores ${'SIG' + sig} (no handler)`, '#F0C36A'); return; }
+    Sound.plink(sig === 'KILL' ? 0 : sig === 'TERM' ? 3 : 6);
+    if (sig === 'STOP') { if (p.state === 'T') return; p.prevState = p.state === 'D' ? 'D' : 'S'; p.state = 'T'; p.onCpu = -1; popAt(p, 'SIGSTOP → stopped (T)', '#B7C4E0'); p.didStop = true; }
+    else if (sig === 'CONT') {
+      if (p.state !== 'T') return;
+      p.state = 'R'; p.vruntime = Math.max(p.vruntime, minVruntime()); popAt(p, 'SIGCONT → running again', '#9EF0B8');
+      if (p.didStop) complete('stopcont');
+      if (p.pendingTerm) { p.pendingTerm = false; setTimeout(() => signal(p, 'TERM'), 400); }
+    }
+    else if (sig === 'TERM') {
+      if (p.state === 'T') { p.pendingTerm = true; popAt(p, 'SIGTERM pending: process is stopped', '#B7C4E0'); return; }
+      popAt(p, 'caught SIGTERM: closing connections…', '#FFE7A8');
+      p.state = 'R';
+      setTimeout(() => { if (!p.dead) exitProc(p, 'exit(0) after SIGTERM', true); }, 2200);
+    }
+    else if (sig === 'KILL') {
+      if (p.state === 'D') { p.pendingKill = true; popAt(p, 'SIGKILL pending: in D state until I/O returns', '#FFB38A'); complete('kill'); return; }
+      exitProc(p, 'killed by SIGKILL', true); complete('kill');
+    }
+    renderActions();
+  }
+
+  // ---------------- memory ----------------
+  const memUsed = () => procs.reduce((s, p) => s + (p.state === 'Z' ? 0 : p.rss), 0);
+  const freeMem = () => RAM - memUsed() - MEM.cache;
+  const oomScore = p => p.oomAdj <= -1000 || p.kind === 'kernel' || p.pid === 1 ? 0 : Math.max(0, Math.min(1000, Math.round((p.rss + p.swapped) / (RAM + SWAP) * 1000) + p.oomAdj));
+  function kswapd() {
+    if (freeMem() >= 48) return;
+    if (MEM.cache > 24) {
+      const drop = Math.min(MEM.cache - 24, 48 - freeMem() + 16); MEM.cache -= drop;
+      popThrottle('evict', () => popup(`kswapd: evicted ${Math.round(drop)}M of page cache`, '#8FB8FF', CACHE_POS.clone().add(new V3(0, 3, 0))));
+      if (freeMem() >= 48) return;
+    }
+    // swap out idle pages, a few chunks per pass
+    for (let n = 0; n < 6 && freeMem() < 48 && MEM.swapUsed < SWAP - 1; n++) {
+      const cands = procs.filter(q => (q.state === 'S' || q.state === 'T' || (q.state === 'R' && q.onCpu < 0 && !q.leak)) && q.kind !== 'kernel' && q.rss > 12 && q.oomAdj > -1000 && !q.oomT);
+      if (!cands.length) break;
+      const v = cands.sort((a, b) => b.rss - a.rss)[0];
+      const out = Math.min(16, v.rss - 8, SWAP - MEM.swapUsed);
+      v.rss -= out; v.swapped += out; MEM.swapUsed += out;
+      if (n < 2) spark(posOf(v), DISK, 0x9A8FB0, 1.0, null, 0.7);
+      popThrottle('swap' + v.pid, () => popAt(v, `swapped out ${Math.round(out)}M`, '#B7B0C8', 1));
+      popThrottle('dm-swap', () => dmesg(`kswapd0: reclaiming, swapped out pages of ${v.comm}[${v.pid}]`), 3);
+    }
+    if (freeMem() < 10 && !oom) oomKill();
+  }
+  const popT = {};
+  function popThrottle(key, fn, gap = 2.5) { if ((popT[key] || -99) + gap > clock) return; popT[key] = clock; fn(); }
+
+  function oomKill() {
+    const cands = procs.filter(q => q.state !== 'Z' && oomScore(q) > 0);
+    if (!cands.length) return;
+    const v = cands.sort((a, b) => oomScore(b) - oomScore(a))[0];
+    const at = posOf(v).clone().add(new V3(v.pl.size * 3.2, 1.2, 0));
+    oom = { victim: v, t: clock, pos: at };
+    hole.visible = true; hole.position.copy(at); hole.scale.setScalar(0.01);
+    v.oomT = clock; v.state = 'R'; v.onCpu = -1;
+    dmesg(`Out of memory: Killed process ${v.pid} (${v.comm}) total-vm:${Math.round(v.vsz)}M, anon-rss:${Math.round(v.rss)}M, oom_score:${oomScore(v)}`);
+    popAt(v, `OOM killer chose ${v.comm} (oom_score ${oomScore(v)})`, '#FFB38A', 2);
+    Sound.thud();
+  }
+  function startLeak() {
+    if (procs.some(q => q.comm === 'leaky-job' && q.state !== 'Z')) return;
+    const q = spawnProc({ pid: nextPid++, ppid: 412, comm: 'leaky-job', user: 'you', color: 0xE86A9A, rss: 40, vsz: 60, thr: 1, kind: 'app', service: 'user.slice', sys: ['mmap', 'write'], busy: 0.9,
+      fds: ['3 /tmp/results.csv'], about: 'A batch job with a memory leak. It keeps calling mmap for more memory and never frees any, so RAM fills up.' }, posOf(byPid(412) || procs[0]));
+    q.state = 'R'; q.leak = true; q.pl.g.scale.setScalar(0.01); q.pl.scale = 0.01; q.grow = 0;
+    popAt(q, 'started leaky-job', '#E86A9A');
+  }
+
+  // ---------------- interrupts ----------------
+  function nicInterrupt() {
+    const cpu = Math.random() < 0.6 ? 0 : 1;
+    const c = cpus[cpu];
+    nicBlink.material.opacity = 1;
+    spark(NIC, () => c.star.position, 0x7FF0FF, 0.55, () => {
+      irq.counts[cpu].eth++; c.flash = 1; Sound.zap();
+      irq.recent.push(clock); irq.recent = irq.recent.filter(t => clock - t < 2);
+      irq.netrx++;
+      const busy = irq.recent.length >= 5;
+      if (busy) {
+        const ks = procs.find(q => q.comm === 'ksoftirqd/0');
+        if (ks && ks.state === 'S') { wake(ks); irq.ksoftirqd++; popAt(ks, 'ksoftirqd/0: finishing NET_RX softirqs', '#B7C4E0'); if (lens === 'irq') complete('softirq'); }
+      } else if (lens === 'irq') popup('IRQ → NET_RX softirq', '#7FF0FF', c.star.position.clone().add(new V3(0, -1.4, 0)), 1.2);
+      // deliver the packet to a socket owner
+      const rx = procs.filter(q => (q.comm === 'nginx: worker' || q.comm === 'sshd') && q.state !== 'Z' && q.state !== 'T');
+      if (!rx.length) return;
+      const q = pick(rx);
+      spark(c.star.position, targetOf(q), 0x7FF0FF, 0.7, () => {
+        if (q.dead) return;
+        if (q.state === 'S') wake(q);
+        if (lens === 'irq') { popAt(q, 'packet → socket → woken', '#7FF0FF', 1); complete('irq'); }
+      }, 0.6, 1);
+    }, 1.1, 2.5);
+  }
+  function diskInterrupt(p) {
+    const cpu = 2, c = cpus[cpu];
+    spark(DISK, () => c.star.position, 0xFFB38A, 0.5, () => {
+      irq.counts[cpu].nvme++; c.flash = 1; Sound.zap(0.7);
+      if (lens === 'irq') popup('nvme IRQ: I/O complete', '#FFB38A', c.star.position.clone().add(new V3(0, -1.4, 0)), 1.2);
+      p.ioIrq = false;
+      if (!p.dead && p.state === 'D') { wake(p); }
+    }, 0.9, 2.5);
+  }
+
+  // ---------------- scheduler ----------------
+  let sliceT = 0; const SLICE = 1.15;
+  let load1 = 1.1, load5 = 0.96, load15 = 0.88;
+  function schedTick() {
+    // charge the slice that just ended
+    for (const c of cpus) {
+      const p = c.proc; if (!p || p.dead || p.state !== 'R') continue;
+      p.vruntime += 4 * 1024 / p.weight;
+      const cg = cgOf(p); if (cg) cg.used++;
+      irq.counts[c.i].loc++;
+    }
+    for (const k in cgState) { const cg = cgState[k]; cg.usage = cg.usage * 0.8 + 0; }
+    for (const c of cpus) { const cg = c.proc && cgOf(c.proc); if (cg) cg.usage += 0.2; }
+    // cgroup quota periods
+    cgTick++;
+    for (const k in cgState) {
+      const cg = cgState[k];
+      if (cg.quota !== Infinity && !cg.throttled && cg.used >= cg.quota * CG_PERIOD) {
+        cg.throttled = true; cg.nrThrottled++;
+        const m = procs.find(q => q.service === k && q.state === 'R') || procs.find(q => q.service === k);
+        if (m) popAt(m, 'cpu.max quota used up: throttled', '#FF8A7A');
+        complete('throttle');
+      }
+    }
+    if (cgTick >= CG_PERIOD) { cgTick = 0; for (const k in cgState) { const cg = cgState[k]; cg.used = 0; cg.throttled = false; cg.nrPeriods++; } }
+
+    const eligible = p => p.state === 'R' && !p.oomT && !(cgOf(p) && cgOf(p).throttled);
+    const rt = procs.filter(p => eligible(p) && p.policy === 'FIFO').sort((a, b) => (b.onCpu >= 0) - (a.onCpu >= 0));
+    const cfs = procs.filter(p => eligible(p) && p.policy !== 'FIFO').sort((a, b) => a.vruntime - b.vruntime);
+    const next = new Array(NCPU).fill(null);
+    for (const p of [...rt, ...cfs]) {
+      const allowed = p.affinity === null ? [0, 1, 2, 3] : [p.affinity];
+      let slot = allowed.find(i => i === p.lastCpu && !next[i]);
+      if (slot === undefined) slot = allowed.find(i => !next[i]);
+      if (slot !== undefined) next[slot] = p;
+      if (next.every(Boolean)) break;
+    }
+    for (const c of cpus) {
+      if (next[c.i] && next[c.i] !== c.proc) { csTotal++; csSec++; c.flash = Math.max(c.flash, 0.6); if (lens === 'sched') popup('context switch', '#FFE7A8', c.star.position.clone().add(new V3(0, -1.2, 0)), 0.9); }
+      c.proc = next[c.i];
+    }
+    for (const p of procs) p.onCpu = -1;
+    for (const c of cpus) if (c.proc) { c.proc.onCpu = c.i; c.proc.lastCpu = c.i; }
+    for (const p of procs) p.cpu = p.cpu * 0.86 + (p.onCpu >= 0 ? 1 : 0) * 0.14;
+
+    for (const c of cpus) {
+      const p = c.proc; if (!p) continue;
+      // running code makes syscalls
+      const chance = p.policy === 'FIFO' ? 0.1 : 0.18 + p.busy * 0.25;
+      if (Math.random() < chance && !pellets.some(x => x.owner === p)) dropPellet(p, pick(p.sys), false);
+      else if (p.policy !== 'FIFO' && !p.leak && Math.random() < 0.3 * (1.1 - p.busy)) { block(p, 'S', rnd(4, 10)); continue; }
+      // touching memory
+      if (p.swapped > 0 && Math.random() < 0.4) majorFault(p);
+      else if (Math.random() < 0.5) p.minflt += Math.floor(rnd(1, 30));
+      if (p.shared > 0 && Math.random() < 0.5) cowCopy(p);
+    }
+    const nr = procs.filter(p => p.state === 'R' || p.state === 'D').length;
+    load1 = load1 * 0.92 + nr * 0.08; load5 = load5 * 0.985 + nr * 0.015; load15 = load15 * 0.995 + nr * 0.005;
+  }
+  function majorFault(p) {
+    const amt = Math.min(8, p.swapped);
+    if (freeMem() < 48 && MEM.swapUsed > SWAP * 0.5) return; // under heavy pressure the fault waits for reclaim
+    p.swapped -= amt; MEM.swapUsed = Math.max(0, MEM.swapUsed - amt); p.rss += amt; p.majflt++;
+    block(p, 'D', rnd(0.8, 1.4));
+    spark(DISK, targetOf(p), 0xFFB38A, 0.9, null, 0.9);
+    popAt(p, 'major page fault: swap-in from disk', '#FFB38A', 1);
+    complete('majfault');
+  }
+  function cowCopy(p) {
+    const amt = Math.min(4, p.shared);
+    p.shared -= amt; p.rss += amt; p.minflt++;
+    popAt(p, 'write → copy-on-write page copy', '#FFFFFF', 0.9);
+    Sound.tick();
+    complete('cow');
+  }
+
+  // ---------------- main simulation step ----------------
+  function simulate(dt) {
+    clock += dt;
+    for (const p of procs.slice()) {
+      if (p.grow !== undefined && p.grow < 1) p.grow = Math.min(1, p.grow + dt * 0.9);
+      if (p.oomT) {
+        if (clock - p.oomT > 2.6) { exitProc(p, 'OOM-killed (SIGKILL)', false); complete('oom'); reap(p); if (oom && oom.victim === p) oom.done = clock; }
+        continue;
+      }
+      if (p.state === 'Z') { const parent = byPid(p.ppid); if (clock >= p.zombieAt + (parent ? 7 : 3)) reap(p); continue; }
+      if (p.state === 'T') continue;
+      if (clock >= p.lifeEnd) { exitProc(p, 'exit(0)', false); continue; }
+      if (p.state === 'S' && clock >= p.wakeAt) wake(p);
+      if (p.state === 'D' && clock >= p.wakeAt && !p.ioIrq) { p.ioIrq = true; diskInterrupt(p); }
+      if (p.state === 'R' && p.onCpu < 0 && p.policy !== 'FIFO' && Math.random() < dt * 0.3 * (1.2 - p.busy)) block(p, 'S', rnd(4, 12));
+      if (p.leak && p.state !== 'T') { const g = 32 * dt; p.rss += g; p.vsz += g * 1.2; }
+      if (p.adoptUntil && clock > p.adoptUntil) p.adoptUntil = 0;
+    }
+    if (Math.random() < dt * 0.3) { const s = procs.filter(p => p.state === 'S'); if (s.length) wake(pick(s)); }
+    const cron = procs.find(p => p.comm === 'cron' && p.state !== 'Z');
+    if (cron && clock > (cron.nextJob || 12)) { cron.nextJob = clock + 35; if (cron.state === 'S') wake(cron); if (cron.state === 'R') dropPellet(cron, 'clone', false); }
+
+    // restarts
+    for (let i = restarts.length - 1; i >= 0; i--) if (clock >= restarts[i].at) { restartService(restarts[i].service); restarts.splice(i, 1); }
+
+    // memory pressure
+    MEM.kswapdT += dt; if (MEM.kswapdT > 0.5) { MEM.kswapdT = 0; kswapd(); }
+    if (freeMem() > 120 && MEM.cache < 170) MEM.cache += 3 * dt; // file reads slowly refill the cache
+    if (oom) {
+      const k = Math.min(1, (clock - oom.t) / 0.8);
+      const fade = oom.done ? Math.max(0, 1 - (clock - oom.done) / 2.5) : 1;
+      hole.scale.setScalar(Math.max(0.01, k * fade));
+      disc.rotation.z += dt * 2;
+      if (oom.done && fade <= 0) { hole.visible = false; oom = null; }
+    }
+
+    // interrupts
+    irq.next -= dt;
+    if (irq.next <= 0) { irq.next = rnd(1.2, 3.2); nicInterrupt(); }
+    if (irq.queue.length && clock >= irq.queue[0]) { irq.queue.shift(); nicInterrupt(); }
+
+    sliceT += dt; if (sliceT >= SLICE) { sliceT = 0; schedTick(); }
+    csT += dt; if (csT >= 1) { csRate = csRate * 0.5 + (csSec / csT) * 0.5; csSec = 0; csT = 0; }
+
+    // comets
+    for (let i = pellets.length - 1; i >= 0; i--) {
+      const pl = pellets[i], m = pl.m;
+      if (pl.landed) {
+        pl.landed += dt; m.material.opacity = Math.max(0, 1 - pl.landed / 3); pl.label.material.opacity = m.material.opacity; pl.tail.material.opacity = m.material.opacity * 0.55;
+        if (pl.landed > 3) killPellet(i);
+        continue;
+      }
+      m.position.y -= pl.vy * dt; m.position.x += Math.sin(clock * 1.3 + pl.ph) * dt * 0.3;
+      if (m.position.y < FLOOR + 0.4) { pl.landed = 0.001; continue; }
+      const o = pl.owner;
+      if (o.dead || o.state === 'Z') continue;
+      if (o.state === 'R' && !o.oomT && posOf(o).distanceTo(m.position) < 0.4 + o.pl.size) { const at = m.position.clone(); killPellet(i); doSyscall(o, pl.name, at); }
+    }
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const u = popups[i]; u.life -= dt; u.s.position.y += dt * 0.6; u.s.material.opacity = Math.min(1, u.life / 0.8);
+      if (u.life <= 0) { scene.remove(u.s); u.s.material.dispose(); popups.splice(i, 1); }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i]; s.t += dt / s.dur;
+      const to = typeof s.to === 'function' ? s.to() : s.to;
+      const e = Math.min(1, s.t), k = e * e * (3 - 2 * e);
+      s.s.position.copy(s.from).lerp(to, k); s.s.position.y += Math.sin(Math.PI * e) * s.arc;
+      if (s.t >= 1) { scene.remove(s.s); s.s.material.dispose(); sparks.splice(i, 1); if (s.onArrive) s.onArrive(); }
+    }
+  }
+
+  // =====================================================================
+  // Motion + looks
+  // =====================================================================
+  const tmpV = new V3(), tmpA = new V3();
+  const ZOMBIE_C = lin(0x55505E), STOP_C = lin(0x8CA0C8), RED_C = lin(0xFF6A5A);
+  function movePlanets(dt, t) {
+    const sd = byPid(1);
+    for (const p of procs) {
+      const f = p.pl, pos = f.g.position;
+      const onCpu = p.onCpu >= 0, R = f.size;
+      const mine = p.state === 'R' ? pellets.find(x => x.owner === p && !x.landed) : null;
+      let speed, arrive = 1.4;
+      if (p.oomT && oom) { f.target.copy(oom.pos); speed = 5; arrive = 0; }
+      else if (p.state === 'Z') { f.target.set(pos.x * 1.02, SURF - 1.2 - R * 0.6, pos.z); speed = 0.45; }
+      else if (p.state === 'T') { f.target.copy(pos); speed = 0; }
+      else if (p.adoptUntil && sd && sd !== p) { f.target.copy(posOf(sd)).add(tmpA.set(Math.cos(p.pid) * 4, 1, Math.sin(p.pid) * 4)); speed = 3; }
+      else if (p.state === 'R') {
+        if (mine) { f.target.copy(mine.m.position); speed = 3.6; arrive = 0; }
+        else { f.retarget -= dt; if (f.retarget <= 0 || pos.distanceTo(f.target) < 1.5) { f.target.copy(p.ns ? nsCenter.clone().add(new V3(rnd(-3.5, 3.5), rnd(-2.5, 2.5), rnd(-3.5, 3.5))) : randomPoint()); f.retarget = rnd(5, 10); } speed = onCpu ? 3.4 : 1.8; }
+      }
+      else if (p.state === 'D') { f.target.set(DISK.x + Math.cos(p.pid) * 3.4, DISK.y + 2 + Math.sin(t + p.pid) * 0.3, DISK.z + Math.sin(p.pid) * 3.4); speed = 2.2; }
+      else if (p.ns) { f.target.copy(nsCenter).add(p.nsOff); speed = 0.8; }
+      else { f.target.set(p.home.x + Math.sin(t * 0.15 + p.pid) * 1.6, p.home.y + Math.sin(t * 0.4 + p.pid) * 0.5, p.home.z + Math.cos(t * 0.15 + p.pid) * 1.6); speed = 0.8; }
+
+      tmpV.copy(f.target).sub(pos); const d = tmpV.length();
+      const want = d < arrive ? 0 : speed * Math.min(1, d / 3);
+      if (d > 0.001) tmpV.multiplyScalar(want / d);
+      f.vel.lerp(tmpV, Math.min(1, dt * 0.9));
+      pos.addScaledVector(f.vel, dt);
+      pos.x = Math.max(-TW / 2 + R, Math.min(TW / 2 - R, pos.x));
+      pos.y = Math.max(FLOOR + R + 0.3, Math.min(SURF - R * 0.5, pos.y));
+      pos.z = Math.max(-TD / 2 + R, Math.min(TD / 2 - R, pos.z));
+      if (!p.oomT) for (const q of procs) {
+        if (q === p || q.oomT) continue; const o = q.pl;
+        tmpV.copy(pos).sub(o.g.position); const dd = tmpV.length(), min = (R + o.size) * 1.05;
+        if (dd > 0.0001 && dd < min) pos.addScaledVector(tmpV, (min - dd) / dd * Math.min(1, dt * 3));
+      }
+
+      // size follows resident memory
+      const growK = p.grow === undefined ? 1 : 1 - Math.pow(1 - p.grow, 3);
+      const oomK = p.oomT ? Math.max(0.02, 1 - (clock - p.oomT) / 2.6) : 1;
+      f.size = f.size + (sizeFor(p) - f.size) * Math.min(1, dt * 0.8);
+      f.scale += (f.size * growK * oomK - f.scale) * Math.min(1, dt * 4);
+      f.g.scale.setScalar(Math.max(0.01, f.scale));
+
+      f.ph += dt * (onCpu ? 3.2 : p.state === 'R' ? 1.8 : 0.9);
+      f.squish *= Math.max(0, 1 - dt * 2.2);
+      const w = 0.012;
+      f.body.scale.set(1 + w * Math.sin(f.ph) + f.squish, 1 + w * Math.sin(f.ph + 2.1) - f.squish * 0.5, 1 + w * Math.sin(f.ph + 4.2) - f.squish * 0.5);
+
+      const orbit = p.state === 'Z' || p.state === 'T' ? 0 : onCpu ? 2.4 : p.state === 'R' ? 1.0 : 0.22;
+      for (const o of f.orgs) {
+        o.ang += dt * o.spd * orbit;
+        tmpV.set(Math.cos(o.ang) * o.r, 0, Math.sin(o.ang) * o.r).applyAxisAngle(o.axis, o.tilt);
+        o.m.position.copy(tmpV);
+      }
+      if (p.state !== 'T') f.nuc.rotation.y += dt * (onCpu ? 0.8 : 0.2);
+
+      // looks
+      const dim = lens === 'ns' && nsInside && !p.ns;
+      const thr = cgOf(p) && cgOf(p).throttled;
+      const k = Math.min(1, dt * 3);
+      const glow = dim ? 0 : p.state === 'Z' ? 0 : onCpu ? 0.75 + Math.sin(t * 6) * 0.1 : p.state === 'R' ? 0.28 : p.state === 'D' ? 0.22 + Math.sin(t * 3 + p.pid) * 0.16 : 0.05;
+      f.nucMat.emissiveIntensity += (glow - f.nucMat.emissiveIntensity) * k;
+      f.nucMat.opacity += ((dim ? 0.1 : 1) - f.nucMat.opacity) * k;
+      const haloOp = dim ? 0 : p.state === 'Z' ? 0 : onCpu ? 0.7 : p.state === 'R' ? 0.26 : p.state === 'D' ? 0.22 : 0.08;
+      f.halo.material.opacity += ((p === selected ? Math.max(haloOp, 0.55) : haloOp) - f.halo.material.opacity) * k;
+      f.mat.opacity += ((dim || p.state === 'Z' ? 0 : p.state === 'S' ? 0.04 : 0.09) - f.mat.opacity) * k;
+      f.rimMat.opacity += ((dim || p.state === 'Z' ? 0 : thr ? 0.6 : onCpu ? 0.42 : p.state === 'S' || p.state === 'T' ? 0.1 : 0.2) - f.rimMat.opacity) * k;
+      f.rimMat.color.lerp(thr ? RED_C : p.policy === 'FIFO' ? RT_C : f.base, Math.min(1, dt * 3));
+      f.orgMat.opacity += ((dim || p.state === 'Z' ? 0 : 1) - f.orgMat.opacity) * Math.min(1, dt * 0.8);
+      if (f.ring) f.ring.material.opacity += ((dim || p.state === 'Z' ? 0 : 0.35) - f.ring.material.opacity) * k;
+      const nucScale = p.state === 'Z' ? 0.6 : 1;
+      f.nuc.scale.setScalar(f.nuc.scale.x + (nucScale - f.nuc.scale.x) * Math.min(1, dt * 0.8));
+      if (p.state === 'Z') f.nucMat.color.lerp(ZOMBIE_C, dt * 0.6);
+      else if (p.state === 'T') f.nucMat.color.lerp(STOP_C, dt * 2);
+      else f.nucMat.color.lerp(WHITE, dt * 2);
+    }
+  }
+  const WHITE = new THREE.Color(1, 1, 1);
+
+  function updateBeams(dt) {
+    for (const c of cpus) {
+      const p = c.proc && !c.proc.dead && c.proc.state === 'R' ? c.proc : null;
+      let tx = c.x, tz = c.z, tlen = 3.5, top = 0.035;
+      if (p) { const q = posOf(p); tx = q.x; tz = q.z; tlen = Math.max(2, SURF - q.y + 0.6); top = lens === 'sched' ? 0.32 : 0.2; }
+      const k = Math.min(1, dt * 3.2);
+      c.x += (tx - c.x) * k; c.z += (tz - c.z) * k; c.len += (tlen - c.len) * k; c.op += (top - c.op) * Math.min(1, dt * 2.5);
+      c.beam.position.set(c.x, SURF, c.z); c.beam.scale.set(1, c.len, 1); c.beam.material.opacity = c.op;
+      c.beam.material.color.lerp(p && p.policy === 'FIFO' ? RT_C : SUN_C, Math.min(1, dt * 4));
+      c.flash *= Math.max(0, 1 - dt * 4);
+      c.label.position.set(c.x, SURF + 1.3, c.z); c.star.position.set(c.x, SURF, c.z);
+      c.star.material.opacity = 0.35 + c.op * 2.2 + c.flash * 0.6; c.star.scale.setScalar(2.4 * (1 + c.flash * 0.8));
+    }
+  }
+
+  function updateOverlays(dt, t) {
+    // page cache nebula
+    const cs = 2 + Math.sqrt(Math.max(0, MEM.cache)) * 0.55;
+    nebSprites.forEach((s, i) => { s.scale.setScalar(cs * (1 + 0.06 * Math.sin(t * 0.5 + i))); s.material.opacity = (lens === 'cache' || lens === 'memory' ? 0.55 : 0.2) * (0.8 + 0.2 * Math.sin(t + i)); });
+    nebLabel.position.set(CACHE_POS.x, CACHE_POS.y + cs * 0.5 + 0.8, CACHE_POS.z);
+    nebLabel.material.opacity = lens === 'cache' || lens === 'memory' ? 1 : 0.35;
+    nicBlink.material.opacity = Math.max(0.25, nicBlink.material.opacity - dt * 2);
+
+    // namespace bubble
+    nsCenter.set(9 + Math.sin(t * 0.05) * 3, Math.sin(t * 0.07) * 1.5, 5 + Math.cos(t * 0.05) * 2);
+    bubble.position.copy(nsCenter);
+    bubMat.opacity += ((lens === 'ns' ? 0.07 : 0.025) - bubMat.opacity) * Math.min(1, dt * 3);
+    bubRim.opacity += ((lens === 'ns' ? 0.22 : 0.07) - bubRim.opacity) * Math.min(1, dt * 3);
+    bubLabel.material.opacity = lens === 'ns' ? 1 : 0.3;
+
+    // cgroup constellations
+    let li = 0;
+    const groups = {};
+    for (const p of procs) if (p.service && p.state !== 'Z') (groups[p.service] = groups[p.service] || []).push(p);
+    if (lens === 'cgroups') {
+      for (const k in groups) {
+        const g = groups[k]; const cg = cgOf(g[0]);
+        for (let i = 1; i < g.length && li < cgLines.length; i++) setLine(cgLines[li++], posOf(g[0]), posOf(g[i]), 0.55, cg.throttled ? RED_C : SUN_C);
+      }
+    }
+    for (; li < cgLines.length; li++) cgLines[li].material.opacity = 0;
+    for (const k in cgLabels) cgLabels[k].visible = false;
+    if (lens === 'cgroups') for (const k in groups) {
+      const s = cgLabels[k] || (cgLabels[k] = (() => { const sp = textSprite(k, '#FFE7A8', 0.62); scene.add(sp); return sp; })());
+      const c = new V3(); groups[k].forEach(p => c.add(posOf(p))); c.multiplyScalar(1 / groups[k].length);
+      s.position.copy(c).add(new V3(0, 2.6 + groups[k][0].pl.size, 0)); s.visible = true;
+    }
+
+    // connections
+    li = 0;
+    const seen = new Set();
+    for (const p of procs) {
+      if (p.state === 'Z') continue;
+      for (const q of peersOf(p)) {
+        const key = p.pid < q.pid ? p.pid + ':' + q.pid : q.pid + ':' + p.pid;
+        if (seen.has(key) || li >= connLines.length) continue; seen.add(key);
+        setLine(connLines[li++], posOf(p), posOf(q), lens === 'conns' ? 0.45 : 0.0);
+      }
+    }
+    for (; li < connLines.length; li++) connLines[li].material.opacity = 0;
+
+    // copy-on-write links (child ↔ parent while pages are still shared)
+    li = 0;
+    for (const p of procs) {
+      if (!(p.shared > 0) || li >= cowLines.length) continue;
+      const par = byPid(p.ppid); if (!par) continue;
+      setLine(cowLines[li++], posOf(p), posOf(par), (lens === 'memory' ? 0.7 : 0.25) * Math.min(1, p.shared / 20));
+    }
+    for (; li < cowLines.length; li++) cowLines[li].material.opacity = 0;
+
+    // page tiles around the selected process
+    const showTiles = lens === 'memory' && selected && !selected.dead && selected.kind !== 'kernel';
+    tiles.visible = !!showTiles;
+    if (showTiles) {
+      const p = selected, pos = posOf(p), r = p.pl.scale * 1.9 + 0.8;
+      tiles.position.copy(pos); tiles.rotation.y += dt * 0.15;
+      const tot = Math.max(1, p.rss + p.shared + p.swapped);
+      const nRes = Math.round(TILE_N * p.rss / tot), nSh = Math.round(TILE_N * p.shared / tot);
+      tiles.children.forEach((m, i) => {
+        const a = i / TILE_N * Math.PI * 2;
+        m.position.set(Math.cos(a) * r, Math.sin(a * 3) * 0.15, Math.sin(a) * r);
+        const col = i < nRes ? p.pl.base : i < nRes + nSh ? WHITE : TILE_SWAP;
+        tileMats[i].color.copy(col); tileMats[i].opacity = i < nRes + nSh ? 0.95 : 0.55;
+      });
+    }
+  }
+  const cgLabels = {};
+  const TILE_SWAP = lin(0x3A3548);
+
+  function animateScenery(dt, t) {
+    for (const r of rocks) { r.m.rotation.x += r.sp.x * dt; r.m.rotation.y += r.sp.y * dt; r.m.rotation.z += r.sp.z * dt; }
+    for (let i = 0; i < BUB; i++) {
+      bubPos[i*3] += bubVel[i*3] * dt; bubPos[i*3+1] += bubVel[i*3+1] * dt; bubPos[i*3+2] += bubVel[i*3+2] * dt;
+      bubVel[i*3] *= 0.995; bubVel[i*3+1] *= 0.995; bubVel[i*3+2] *= 0.995;
+      if (Math.abs(bubPos[i*3]) > TW / 2 + 8 || Math.abs(bubPos[i*3+1]) > 16 || Math.abs(bubPos[i*3+2]) > TD / 2 + 8) resetBubble(i);
+      else if (Math.abs(bubVel[i*3]) + Math.abs(bubVel[i*3+2]) < 0.05) { bubVel[i*3] = rnd(-0.25, 0.25); bubVel[i*3+2] = rnd(-0.25, 0.25); }
+    }
+    bubGeo.attributes.position.needsUpdate = true;
+  }
+
+  // =====================================================================
+  // Sound
+  // =====================================================================
+  const Sound = {
+    ac: null, master: null, wet: null, on: false, padT: 0,
+    init() {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+      const ac = this.ac = new AC();
+      this.master = ac.createGain(); this.master.gain.value = 0.0; this.master.connect(ac.destination);
+      const len = ac.sampleRate * 3.2, ir = ac.createBuffer(2, len, ac.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+      const conv = ac.createConvolver(); conv.buffer = ir;
+      this.wet = ac.createGain(); this.wet.gain.value = 0.7; this.wet.connect(conv); conv.connect(this.master);
+      this.dry = ac.createGain(); this.dry.gain.value = 0.55; this.dry.connect(this.master);
+      const nb = ac.createBuffer(1, ac.sampleRate * 4, ac.sampleRate), nd = nb.getChannelData(0); let last = 0;
+      for (let i = 0; i < nd.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; nd[i] = last * 3.2; }
+      const ns = ac.createBufferSource(); ns.buffer = nb; ns.loop = true;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.6;
+      const lfo = ac.createOscillator(), lfoG = ac.createGain(); lfo.frequency.value = 0.05; lfoG.gain.value = 110; lfo.connect(lfoG); lfoG.connect(lp.frequency); lfo.start();
+      const ng = ac.createGain(); ng.gain.value = 0.16; ns.connect(lp); lp.connect(ng); ng.connect(this.master); ns.start();
+      return true;
+    },
+    toggle() {
+      if (!this.ac && !this.init()) return false;
+      this.on = !this.on;
+      if (this.ac.state === 'suspended') this.ac.resume();
+      const g = this.master.gain, now = this.ac.currentTime;
+      g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(this.on ? 0.9 : 0, now + 1.2);
+      if (this.on) this.padT = 0;
+      return this.on;
+    },
+    SCALE: [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.5, 1568.0, 1760.0],
+    note(freq, t0, dur, gain, type = 'sine', wet = 1) {
+      const ac = this.ac, o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(this.dry); if (wet) { const w = ac.createGain(); w.gain.value = wet; g.connect(w); w.connect(this.wet); }
+      o.start(t0); o.stop(t0 + dur + 0.05);
+    },
+    plink(idx) { if (!this.on) return; const t = this.ac.currentTime, f = this.SCALE[idx % this.SCALE.length]; this.note(f, t, 1.4, 0.05); this.note(f * 2, t, 0.5, 0.012, 'triangle'); },
+    chime() { if (!this.on) return; const t = this.ac.currentTime; [659.25, 987.77, 1318.5].forEach((f, i) => this.note(f, t + i * 0.09, 2.2, 0.035)); },
+    tick() { if (!this.on) return; this.note(2093, this.ac.currentTime, 0.12, 0.02, 'triangle', 0.3); },
+    zap(v = 1) { if (!this.on) return; this.note(1567.98, this.ac.currentTime, 0.25, 0.012 * v, 'sine', 0.6); },
+    thud() {
+      if (!this.on) return; const ac = this.ac, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + 2.2);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.12, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+      o.connect(g); g.connect(this.dry); const w = ac.createGain(); w.gain.value = 0.8; g.connect(w); w.connect(this.wet); o.start(t); o.stop(t + 2.7);
+    },
+    bubble(vol = 1) {
+      if (!this.on) return; const ac = this.ac, t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(rnd(260, 380), t); o.frequency.exponentialRampToValueAtTime(rnd(900, 1300), t + 0.09);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03 * vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      o.connect(g); g.connect(this.dry); o.start(t); o.stop(t + 0.15);
+    },
+    pad(dt) {
+      if (!this.on) return; this.padT -= dt; if (this.padT > 0) return; this.padT = 9;
+      const ac = this.ac, t = ac.currentTime;
+      const chords = [[110, 164.81, 220, 329.63], [98, 146.83, 196, 293.66], [87.31, 130.81, 174.61, 261.63], [98, 146.83, 220, 329.63]];
+      const ch = chords[Math.floor(clock / 9) % chords.length];
+      for (const f of ch) for (const det of [-3, 3]) {
+        const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+        o.type = 'triangle'; o.frequency.value = f; o.detune.value = det;
+        lp.type = 'lowpass'; lp.frequency.value = 700;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.012, t + 3.5); g.gain.linearRampToValueAtTime(0.0, t + 11);
+        o.connect(lp); lp.connect(g); g.connect(this.dry); const w = ac.createGain(); w.gain.value = 1.2; g.connect(w); w.connect(this.wet);
+        o.start(t); o.stop(t + 11.2);
+      }
+    }
+  };
+
+  // =====================================================================
+  // Missions
+  // =====================================================================
+  const MISSIONS = [
+    { id: 'inspect', t: 'Inspect a process', how: 'Tap any planet.', learn: 'Everything ps and htop show comes from /proc/PID: state, parent, memory, open files.', cmd: 'cat /proc/1/status' },
+    { id: 'sleep', t: 'Watch a syscall put a process to sleep', how: 'Select a planet and wait for a blue comet (epoll_wait, futex, recvfrom) to reach it.', learn: 'Blocking syscalls move a task to state S and off the run queue until an event wakes it.', cmd: 'cat /proc/PID/wchan; echo' },
+    { id: 'fork', t: 'fork() a process', how: 'Select a planet and press fork().', learn: 'fork() makes a child that shares every page with its parent until one of them writes.', cmd: 'strace -f -e trace=clone,execve bash -c "ls"' },
+    { id: 'cow', t: 'Watch a copy-on-write copy', how: 'After a fork, watch the child while it runs.', learn: 'On the first write to a shared page, the kernel copies just that page. That is why fork() is cheap.', cmd: 'grep -i cow /proc/vmstat' },
+    { id: 'reap', t: 'Reap a zombie by hand', how: 'Select a zombie (grey, no moons) and press "parent: wait4()".', learn: 'A zombie keeps only its PID and exit status until its parent collects them with wait().', cmd: 'ps -eo pid,ppid,stat,comm | awk \'$3 ~ /Z/\'' },
+    { id: 'stopcont', t: 'Stop and resume a process', how: 'Send SIGSTOP, then SIGCONT.', learn: 'SIGSTOP freezes a task in state T. It cannot be caught. SIGCONT resumes it. Ctrl-Z in a shell does this.', cmd: 'kill -STOP PID; kill -CONT PID' },
+    { id: 'kill', t: 'Send SIGKILL', how: 'Select a process and press SIGKILL. Try one in state D too.', learn: 'SIGKILL cannot be caught or ignored, but a task in state D only dies after its I/O returns.', cmd: 'kill -9 PID' },
+    { id: 'orphan', t: 'Orphan a child', how: 'Kill a parent that has children, such as nginx: master or postgres.', learn: 'When a parent dies, its children are re-parented to PID 1, which reaps them when they exit.', cmd: 'ps -o pid,ppid,comm --ppid 1' },
+    { id: 'fifo', t: 'Make a process real-time', how: 'Select a process and press SCHED_FIFO.', learn: 'A SCHED_FIFO task runs before every normal task and keeps the CPU until it blocks.', cmd: 'chrt -f -p 50 PID' },
+    { id: 'pin', t: 'Pin a process to one CPU', how: 'Select a process and press "pin to CPU0".', learn: 'CPU affinity limits which CPUs a task may run on. The scheduler will not move it anywhere else.', cmd: 'taskset -cp 0 PID' },
+    { id: 'throttle', t: 'Throttle a cgroup', how: 'Open the Cgroups lens and limit the checkout pod to 0.5 CPU.', learn: 'cpu.max gives a cgroup a quota per period. When it is used up, every task in the group waits for the next period.', cmd: 'cat /sys/fs/cgroup/kubepods.slice/*/cpu.stat' },
+    { id: 'cachemiss', t: 'See a page-cache miss', how: 'Open the Page cache lens and wait for a read that goes to disk.', learn: 'Reads are served from the page cache when possible. A miss waits on the disk in state D.', cmd: 'free -m   # the buff/cache column' },
+    { id: 'majfault', t: 'Cause a major page fault', how: 'Start the memory leak, then watch a swapped-out process run.', learn: 'A major fault means the page had to be read back from disk (swap). A minor fault is served from RAM.', cmd: 'ps -o min_flt,maj_flt -p PID' },
+    { id: 'oom', t: 'Get a process OOM-killed', how: 'Memory lens → start the memory leak and let RAM and swap fill up.', learn: 'When memory runs out, the OOM killer picks the process with the highest oom_score and sends it SIGKILL.', cmd: 'dmesg -T | grep -i "out of memory"' },
+    { id: 'irq', t: 'Follow a packet from the NIC', how: 'Open the Interrupts lens and watch a packet go NIC → CPU → process.', learn: 'The NIC raises an interrupt, the kernel runs the NET_RX softirq, and data on a socket wakes the sleeping reader.', cmd: 'watch -d cat /proc/interrupts' },
+    { id: 'ns', t: 'See a PID from inside a container', how: 'Open the Namespaces lens and switch to the view from inside the pod.', learn: 'A PID namespace gives a container its own PID numbers. checkout-api is PID 1 inside and 2210 outside.', cmd: 'grep NSpid /proc/2210/status' }
+  ];
+  const done = new Set();
+  const missionsEl = $('missions');
+  function complete(id) {
+    if (done.has(id)) return;
+    const m = MISSIONS.find(x => x.id === id); if (!m) return;
+    done.add(id);
+    $('bMissions').textContent = `Missions ${done.size}/${MISSIONS.length}`;
+    showToast(m.t, m.learn);
+    Sound.chime();
+    if (!missionsEl.hidden) renderMissions();
+  }
+    let toastTimer = 0;
+  function showToast(title, body) {
+    const t = $('toast'); $('toastT').textContent = title; $('toastB').textContent = body;
+    t.hidden = false; t.style.opacity = 1; clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.opacity = 0; setTimeout(() => { t.hidden = true; }, 500); }, 5200);
+  }
+  function renderMissions() {
+    missionsEl.innerHTML = `
+      <div class="head"><span></span><div><h2>Missions</h2><div class="ids">${done.size} of ${MISSIONS.length} complete · no timer, no score</div></div><button class="close" data-a="closem" aria-label="Close">✕</button></div>
+      <ul class="mlist">${MISSIONS.map(m => `<li class="${done.has(m.id) ? 'done' : ''}"><span class="ck"></span><div><b>${m.t}</b>
+        ${done.has(m.id) ? `<small class="learn">${m.learn}</small><button class="cmd" data-copy="${esc(m.cmd)}">${esc(m.cmd)}</button>` : `<small>${m.how}</small>`}</div></li>`).join('')}</ul>`;
+  }
+  missionsEl.addEventListener('click', e => {
+    if (e.target.closest('[data-a="closem"]')) { missionsEl.hidden = true; $('bMissions').setAttribute('aria-pressed', 'false'); }
+  });
+  $('bMissions').addEventListener('click', () => {
+    const open = missionsEl.hidden;
+    if (open) { select(null); renderMissions(); }
+    missionsEl.hidden = !open; $('bMissions').setAttribute('aria-pressed', String(open));
+  });
+
+  // copy commands anywhere
+  tankEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    const txt = b.dataset.copy;
+    try { navigator.clipboard.writeText(txt).then(() => flashCopied(b), () => selectText(b)); } catch (err) { selectText(b); }
+  });
+  function flashCopied(b) { const o = b.textContent; b.textContent = 'copied'; setTimeout(() => { b.textContent = o; }, 900); }
+  function selectText(b) { const r = document.createRange(); r.selectNodeContents(b); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+  // =====================================================================
+  // Process card
+  // =====================================================================
+  const card = $('card'), lensEl = $('lens'), htopEl = $('htop'), tip = $('tip');
+  const STATE_TXT = {
+    R: ['R', 'running or runnable', 'var(--run)'], S: ['S', 'sleeping, waiting for an event', 'var(--sleep)'], D: ['D', 'waiting on disk, cannot be interrupted', 'var(--disk)'],
+    Z: ['Z', 'zombie: exited, waiting for its parent', 'var(--zombie)'], T: ['T', 'stopped by a signal', 'var(--stop)']
+  };
+  const hex = c => '#' + c.toString(16).padStart(6, '0');
+  const shownPid = p => (lens === 'ns' && nsInside && p.ns) ? p.nsPid : p.pid;
+
+  function select(p) {
+    selected = p;
+    if (!p) { card.hidden = true; card.innerHTML = ''; return; }
+    missionsEl.hidden = true; $('bMissions').setAttribute('aria-pressed', 'false');
+    Sound.chime(); complete('inspect');
+    const fdRows = p.kind === 'kernel' ? ['(kernel thread, no files)'] : ['0 /dev/null', '1 socket:[journal]', '2 socket:[journal]', ...p.fds];
+    card.innerHTML = `
+      <div class="head"><span class="dot" style="color:${hex(p.color)}"></span>
+        <div><h2>${esc(p.comm)}</h2><div class="ids" data-f="ids"></div></div>
+        <button class="close" data-a="close" aria-label="Close">✕</button></div>
+      <div class="state"><span class="pill" data-f="pill"></span><span data-f="stxt"></span></div>
+      <div class="stats">
+        <div><span>%CPU</span><b data-f="cpu"></b></div><div><span>nice</span><b data-f="nice"></b></div><div><span>vruntime</span><b data-f="vr"></b></div>
+        <div><span>policy</span><b data-f="pol"></b></div><div><span>CPUs</span><b data-f="aff"></b></div><div><span>threads</span><b>${p.thr}</b></div>
+      </div>
+      <div><h3>Memory</h3><div class="stats">
+        <div><span>RSS</span><b data-f="rss"></b></div><div><span>swap</span><b data-f="swap"></b></div><div><span>COW shared</span><b data-f="shared"></b></div>
+        <div><span>VSZ</span><b data-f="vsz"></b></div><div><span>faults min/maj</span><b data-f="flt"></b></div><div><span>oom_score</span><b data-f="oom"></b></div>
+      </div></div>
+      <p class="about">${p.about}</p>
+      <div><h3>Recent syscalls</h3><ul class="mono-list" data-f="recent"></ul></div>
+      <div><h3>File descriptors · /proc/${p.pid}/fd</h3><ul class="mono-list fd">${fdRows.map(f => `<li><span>${esc(f)}</span></li>`).join('')}</ul></div>
+      <div data-f="acts" style="display:grid;gap:8px"></div>
+      <div><h3>Try it on a real machine</h3><div class="cmds">${[
+        `ps -o pid,ppid,stat,ni,cls,psr,rss,vsz,min_flt,maj_flt -p ${p.pid}`, `cat /proc/${p.pid}/status`, `ls -l /proc/${p.pid}/fd`, `cat /proc/${p.pid}/oom_score`
+      ].map(c => `<button class="cmd" data-copy="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`;
+    card.hidden = false;
+    renderActions(); refreshCard();
+  }
+  function actKey(p) { return [p.state === 'Z', p.state === 'T', p.policy, p.affinity, p.oomAdj, p.dead].join('|'); }
+  function renderActions() {
+    const p = selected; if (!p || card.hidden) return;
+    const el = card.querySelector('[data-f="acts"]'); if (!el) return;
+    el.dataset.key = actKey(p);
+    if (p.state === 'Z') { el.innerHTML = `<div class="actions"><button data-a="reap">parent: wait4()</button></div><p class="hint">${esc(p.exitReason || 'exited')}. Its parent (PID ${p.ppid}) has not collected the exit status yet.</p>`; return; }
+    if (p.kind === 'kernel') { el.innerHTML = `<p class="hint">Kernel threads cannot be forked, signalled or reniced from user space.</p>`; return; }
+    el.innerHTML = `
+      <div><h3>Process</h3><div class="actions"><button data-a="fork">fork()</button><button data-a="nicedown">nice −5</button><button data-a="niceup">nice +5</button></div></div>
+      <div><h3>Signals</h3><div class="actions">
+        <button data-a="TERM">SIGTERM</button>
+        ${p.state === 'T' ? '<button data-a="CONT">SIGCONT</button>' : '<button data-a="STOP">SIGSTOP</button>'}
+        <button data-a="KILL" class="warn">SIGKILL</button></div></div>
+      <div><h3>Scheduling</h3><div class="actions">
+        <button data-a="fifo" aria-pressed="${p.policy === 'FIFO'}">${p.policy === 'FIFO' ? 'back to SCHED_OTHER' : 'SCHED_FIFO'}</button>
+        <button data-a="pin" aria-pressed="${p.affinity !== null}">${p.affinity !== null ? 'unpin' : 'pin to CPU0'}</button></div></div>
+      <div><h3>Memory</h3><div class="actions">
+        <button data-a="oomprotect" aria-pressed="${p.oomAdj <= -1000}">${p.oomAdj <= -1000 ? 'oom_score_adj 0' : 'protect: oom_score_adj −1000'}</button></div></div>`;
+  }
+  function refreshCard() {
+    const p = selected; if (!p || card.hidden) return;
+    const q = s => card.querySelector(`[data-f="${s}"]`);
+    const [l, txt, col] = STATE_TXT[p.state];
+    const pill = q('pill'); pill.textContent = p.oomT ? 'OOM' : p.onCpu >= 0 ? `R · CPU${p.onCpu}` : l; pill.style.color = p.oomT ? 'var(--disk)' : col;
+    const thr = cgOf(p) && cgOf(p).throttled;
+    q('stxt').textContent = p.oomT ? 'being killed by the OOM killer' : p.onCpu >= 0 ? 'on a CPU right now' : thr ? 'runnable, but its cgroup is throttled' : txt;
+    const nsNote = p.ns ? (lens === 'ns' && nsInside ? ` · host PID ${p.pid}` : ` · PID ${p.nsPid} in pod`) : '';
+    q('ids').textContent = `PID ${shownPid(p)} · PPID ${p.ppid} · ${p.user}${nsNote}${p.service ? ' · ' + p.service : ''}`;
+    q('cpu').textContent = (p.cpu * 100).toFixed(1);
+    q('nice').textContent = p.nice; q('vr').textContent = p.vruntime.toFixed(0) + ' ms';
+    q('pol').textContent = p.policy === 'FIFO' ? 'FIFO 50' : 'OTHER';
+    q('aff').textContent = p.affinity === null ? '0-3' : String(p.affinity);
+    q('rss').textContent = Math.round(p.rss) + 'M'; q('swap').textContent = Math.round(p.swapped) + 'M'; q('shared').textContent = Math.round(p.shared) + 'M';
+    q('vsz').textContent = Math.round(p.vsz) + 'M'; q('flt').textContent = `${p.minflt}/${p.majflt}`; q('oom').textContent = oomScore(p);
+    q('recent').innerHTML = p.recent.length ? p.recent.slice(0, 5).map(r => `<li><span>${r.name}()</span><span>${SYS[r.name].note}</span></li>`).join('') : '<li><span class="hint">Waiting for its next syscall…</span></li>';
+    const el = q('acts'); if (el && el.dataset.key !== actKey(p)) renderActions();
+  }
+  card.addEventListener('click', e => {
+    const b = e.target.closest('button[data-a]'); if (!b || !selected) return;
+    const p = selected, a = b.dataset.a;
+    if (a === 'close') return select(null);
+    if (a === 'reap') { reap(p); complete('reap'); return; }
+    if (p.state === 'Z' || p.dead) return;
+    if (a === 'fork') { const c = forkProc(p); complete('fork'); select(c); }
+    else if (a === 'nicedown' || a === 'niceup') {
+      p.nice = Math.max(-20, Math.min(19, p.nice + (a === 'niceup' ? 5 : -5))); p.weight = 1024 / Math.pow(1.25, p.nice);
+      popAt(p, `nice ${p.nice} · weight ${Math.round(p.weight)}`, '#FFE7A8'); Sound.plink(a === 'niceup' ? 2 : 9);
+    }
+    else if (['TERM', 'STOP', 'CONT', 'KILL'].includes(a)) signal(p, a);
+    else if (a === 'fifo') { p.policy = p.policy === 'FIFO' ? 'OTHER' : 'FIFO'; popAt(p, p.policy === 'FIFO' ? 'SCHED_FIFO priority 50: runs before all normal tasks' : 'SCHED_OTHER (CFS)', '#FF8A7A'); if (p.policy === 'FIFO') { complete('fifo'); if (p.state === 'S') wake(p); } }
+    else if (a === 'pin') { p.affinity = p.affinity === null ? 0 : null; popAt(p, p.affinity === null ? 'affinity: CPUs 0-3' : 'affinity: CPU0 only', '#FFE7A8'); if (p.affinity !== null) complete('pin'); }
+    else if (a === 'oomprotect') { p.oomAdj = p.oomAdj <= -1000 ? 0 : -1000; popAt(p, `oom_score_adj ${p.oomAdj}`, '#FFB38A'); }
+    renderActions(); refreshCard();
+  });
+
+  // =====================================================================
+  // Lenses
+  // =====================================================================
+  const cmdList = arr => `<div><h4>Try it on a real machine</h4><div class="cmds">${arr.map(c => `<button class="cmd" data-copy="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`;
+  const LENS = {
+    sched: {
+      title: 'Scheduler · CFS run queue',
+      body: () => `<p>Each beam from a star above is a CPU. Every slice the scheduler gives each CPU to the runnable task with the smallest <b>vruntime</b>, the one that has had the least CPU so far. Every switch between tasks costs a context switch: registers are saved and caches go cold.</p>
+        <p>Real-time <b>SCHED_FIFO</b> tasks (red beams) always go first. Pinned tasks only run on the CPUs in their affinity mask.</p>`,
+      live: () => {
+        const run = procs.filter(p => p.state === 'R' && !p.oomT);
+        const rt = run.filter(p => p.policy === 'FIFO'), cf = run.filter(p => p.policy !== 'FIFO').sort((a, b) => a.vruntime - b.vruntime);
+        const all = [...rt, ...cf]; const minV = cf.length ? cf[0].vruntime : 0, span = Math.max(8, ...cf.map(p => p.vruntime - minV));
+        const rows = all.slice(0, 10).map(p => {
+          const thr = cgOf(p) && cgOf(p).throttled;
+          const tag = p.policy === 'FIFO' ? '<span style="color:var(--rt)">FIFO</span>' : thr ? '<span style="color:var(--rt)">thrtl</span>' : p.onCpu >= 0 ? 'CPU' + p.onCpu : 'wait';
+          return `<div class="r"><span class="n">${esc(p.comm)} <span style="color:var(--faint)">${p.pid}${p.affinity !== null ? ' ·pin' : ''}</span></span><span class="bar"><i style="background:var(--sun);width:${p.policy === 'FIFO' ? 4 : 8 + 92 * (p.vruntime - minV) / span}%"></i></span><span class="c ${p.onCpu < 0 ? 'w' : ''}">${tag}</span></div>`;
+        }).join('');
+        return `<div class="kv"><span>context switches</span><span>${csRate.toFixed(1)}/s · total ${csTotal}</span><span>runnable</span><span>${run.length} tasks on ${NCPU} CPUs</span></div>
+          <div class="rq">${rows || '<p>Everything is asleep. All four CPUs are idle.</p>'}</div>`;
+      },
+      cmds: ['vmstat 1            # the cs column', 'pidstat -w 1', 'chrt -p PID', 'taskset -cp PID', 'perf sched latency']
+    },
+    memory: {
+      title: 'Memory · pages, swap, OOM',
+      body: () => `<p>Each process sees its own virtual address space (<b>VSZ</b>), but only pages actually in RAM count as <b>RSS</b>. Select a planet to see its pages: <span style="color:var(--text)">colored</span> = in RAM, <span style="color:#fff">white</span> = shared with its parent after fork (copy-on-write), <span style="color:var(--faint)">dark</span> = swapped out.</p>
+        <p>When free memory runs low, kswapd first evicts page cache, then swaps out idle pages. When swap is full too, the OOM killer steps in.</p>
+        <div class="row"><button data-l="leak">Start a memory leak</button><button data-l="drop">Drop caches</button></div>`,
+      live: () => {
+        const used = memUsed(), cache = MEM.cache, free = Math.max(0, RAM - used - cache);
+        const pc = v => (v / RAM * 100).toFixed(1) + '%';
+        const leak = procs.find(q => q.comm === 'leaky-job' && q.state !== 'Z');
+        return `<div><h4>RAM · ${RAM}M</h4><div class="bar" style="height:10px"><i style="background:#C7A4FF;width:${pc(used)}"></i><i style="background:var(--cache);width:${pc(cache)}"></i></div>
+          <div class="legend" style="margin-top:4px"><span><i style="background:#C7A4FF"></i>used ${Math.round(used)}M</span><span><i style="background:var(--cache)"></i>buff/cache ${Math.round(cache)}M</span><span><i style="background:rgba(180,186,255,.2)"></i>free ${Math.round(free)}M</span></div></div>
+          <div><h4>Swap · ${SWAP}M</h4><div class="bar" style="height:8px"><i style="background:#9A8FB0;width:${(MEM.swapUsed / SWAP * 100).toFixed(1)}%"></i></div>
+          <div class="legend" style="margin-top:4px"><span>used ${Math.round(MEM.swapUsed)}M</span>${leak ? `<span style="color:#E86A9A">leaky-job RSS ${Math.round(leak.rss)}M and growing</span>` : ''}</div></div>
+          ${kmsg.length ? `<div><h4>dmesg</h4><div class="dmesg">${kmsg.slice(0, 4).map(l => `<span>${esc(l)}</span>`).join('')}</div></div>` : ''}`;
+      },
+      after: () => { const b = lensEl.querySelector('[data-l="leak"]'); if (b) b.disabled = procs.some(q => q.comm === 'leaky-job' && q.state !== 'Z'); },
+      cmds: ['free -m', 'vmstat 1', 'cat /proc/PID/smaps_rollup', 'dmesg -T | grep -i "out of memory"']
+    },
+    cache: {
+      title: 'Page cache',
+      body: () => `<p>Linux keeps recently read file pages in RAM: the <b>page cache</b>, the blue nebula. A read that hits the cache returns straight from memory. A miss has to go to the disk and the process waits in state D.</p>
+        <p>This is why <code>free</code> often shows little "free" memory. The cache gives memory back the moment programs need it, so it is not wasted.</p>
+        <div class="row"><button data-l="drop">Drop caches</button></div>`,
+      live: () => {
+        const tot = MEM.hits + MEM.misses;
+        return `<div class="kv"><span>cache size</span><span>${Math.round(MEM.cache)}M</span><span>hits</span><span>${MEM.hits}</span><span>misses</span><span>${MEM.misses}</span><span>hit ratio</span><span>${tot ? (MEM.hits / tot * 100).toFixed(0) + '%' : '–'}</span></div>
+          <p class="hint">Postgres backends and cron's backup.sh read files with pread64. Press "Drop syscalls" to make more reads happen.</p>`;
+      },
+      cmds: ['free -m', 'sync; echo 3 | sudo tee /proc/sys/vm/drop_caches', 'sudo cachestat 1   # bcc tools']
+    },
+    irq: {
+      title: 'Interrupts',
+      body: () => `<p>Hardware gets the CPU's attention with an <b>interrupt</b>. The handler does the minimum (the "top half") and leaves the rest to a <b>softirq</b> such as NET_RX. When packets pour in faster than softirqs can run inline, the kernel hands the work to <b>ksoftirqd</b>.</p>
+        <p>Follow a packet: the NIC hits a CPU, NET_RX runs, the data lands on a socket, and the sleeping process that owns it wakes up. Disk interrupts wake processes waiting in state D.</p>
+        <div class="row"><button data-l="burst">Send a traffic burst</button></div>`,
+      live: () => `<table class="t"><tr><th>IRQ</th>${cpus.map(c => `<th>CPU${c.i}</th>`).join('')}</tr>
+        <tr><td>45 eth0</td>${irq.counts.map(c => `<td>${c.eth}</td>`).join('')}</tr>
+        <tr><td>38 nvme0q</td>${irq.counts.map(c => `<td>${c.nvme}</td>`).join('')}</tr>
+        <tr><td>LOC timer</td>${irq.counts.map(c => `<td>${c.loc}</td>`).join('')}</tr></table>
+        <div class="kv"><span>NET_RX softirqs</span><span>${irq.netrx}</span><span>ksoftirqd wake-ups</span><span>${irq.ksoftirqd}</span></div>`,
+      cmds: ['cat /proc/interrupts', 'watch -d cat /proc/softirqs', 'mpstat -I SUM 1']
+    },
+    cgroups: {
+      title: 'Cgroups',
+      body: () => `<p>Every service lives in a <b>control group</b>. Lines join the processes in the same cgroup. A cgroup can be given a CPU quota with <code>cpu.max</code>: once the group uses its quota for the period, all its tasks are <b>throttled</b> until the next period. This is exactly how Kubernetes CPU limits work.</p>
+        <div class="row"><button data-l="limit"></button></div>`,
+      live: () => {
+        const rows = Object.keys(cgState).filter(k => procs.some(p => p.service === k && p.state !== 'Z')).sort().map(k => {
+          const cg = cgState[k];
+          return `<tr><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k)}</td><td>${cg.quota === Infinity ? 'max' : (cg.quota * 100000) + ' 100000'}</td><td>${(cg.usage * 100).toFixed(0)}%</td><td style="${cg.throttled ? 'color:var(--rt)' : ''}">${cg.nrThrottled}</td></tr>`;
+        }).join('');
+        return `<table class="t"><tr><th>cgroup</th><th>cpu.max</th><th>CPU</th><th>throttled</th></tr>${rows}</table>`;
+      },
+      after: () => { const b = lensEl.querySelector('[data-l="limit"]'); if (b) { const cg = cgState['kubepods/checkout']; b.textContent = cg && cg.quota !== Infinity ? 'Remove the checkout pod limit' : 'Limit checkout pod to 0.5 CPU'; } },
+      cmds: ['systemd-cgls', 'cat /sys/fs/cgroup/system.slice/nginx.service/cpu.stat', 'kubectl describe pod checkout | grep -A2 Limits']
+    },
+    conns: {
+      title: 'File descriptors & connections',
+      body: () => `<p>A process talks to the world through <b>file descriptors</b>: small numbers indexing its open files. 0, 1 and 2 are stdin, stdout and stderr. Sockets and pipes are file descriptors too.</p>
+        <p>Glowing lines are TCP connections. When one side writes, the data travels to the peer, and if the peer is asleep in epoll_wait or recvfrom, the kernel wakes it.</p>`,
+      live: () => {
+        const pairs = [];
+        const seen = new Set();
+        for (const p of procs) for (const q of peersOf(p)) { const k = [p.pid, q.pid].sort().join(); if (!seen.has(k) && p.state !== 'Z') { seen.add(k); pairs.push([p, q]); } }
+        return `<ul class="mono-list">${pairs.slice(0, 9).map(([a, b]) => `<li><span>${esc(a.comm)} ⇄ ${esc(b.comm)}</span><span>TCP</span></li>`).join('')}</ul>`;
+      },
+      cmds: ['ss -tanp', 'lsof -p PID', 'ls -l /proc/PID/fd']
+    },
+    ns: {
+      title: 'Namespaces',
+      body: () => `<p>A container is just processes with their own <b>namespaces</b>. The green bubble is the checkout pod. Its PID namespace gives it private PID numbers, and its network namespace gives it its own localhost. Mount, UTS, IPC and user namespaces work the same way for other resources.</p>
+        <div class="row"><button data-l="nsview"></button></div>`,
+      live: () => {
+        const m = procs.filter(p => p.ns && p.state !== 'Z');
+        return `<table class="t"><tr><th>process</th><th>PID on host</th><th>PID in pod</th></tr>${m.map(p => `<tr><td>${esc(p.comm)}</td><td>${p.pid}</td><td>${p.nsPid}</td></tr>`).join('')}</table>
+          <p class="hint">${nsInside ? 'Inside the pod, only its own processes exist. Everything else has faded out.' : 'From the host, every process is visible with its real PID.'}</p>`;
+      },
+      after: () => { const b = lensEl.querySelector('[data-l="nsview"]'); if (b) b.textContent = nsInside ? 'Back to the host view' : 'View from inside the pod'; },
+      cmds: ['lsns -p 2210', 'sudo nsenter -t 2210 -p -r ps aux', 'grep NSpid /proc/2210/status']
+    }
+  };
+  function openLens(name) {
+    lens = lens === name ? null : name;
+    if (lens !== 'ns') nsInside = false;
+    document.querySelectorAll('[data-lens]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lens === lens)));
+    if (!lens) { lensEl.hidden = true; lensEl.innerHTML = ''; refreshCard(); return; }
+    const L = LENS[lens];
+    lensEl.innerHTML = `<h3>${L.title}</h3>${L.body()}<div data-live style="display:grid;gap:8px"></div>${cmdList(L.cmds)}`;
+    lensEl.hidden = false;
+    refreshLens(); refreshCard();
+  }
+  function refreshLens() {
+    if (!lens) return;
+    const L = LENS[lens];
+    const live = lensEl.querySelector('[data-live]'); if (live) live.innerHTML = L.live();
+    if (L.after) L.after();
+  }
+  document.getElementById('dock').addEventListener('click', e => { const b = e.target.closest('[data-lens]'); if (b) openLens(b.dataset.lens); });
+  lensEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-l]'); if (!b || b.disabled) return;
+    const a = b.dataset.l;
+    if (a === 'leak') startLeak();
+    else if (a === 'drop') { const d = MEM.cache; MEM.cache = 8; popup(`dropped ${Math.round(d - 8)}M of clean page cache`, '#8FB8FF', CACHE_POS.clone().add(new V3(0, 3, 0))); Sound.tick(); }
+    else if (a === 'burst') { for (let i = 0; i < 12; i++) irq.queue.push(clock + i * 0.16); }
+    else if (a === 'limit') {
+      const cg = cgOf({ service: 'kubepods/checkout' });
+      cg.quota = cg.quota === Infinity ? 0.5 : Infinity; cg.used = 0; cg.throttled = false;
+      const m = procs.find(p => p.service === 'kubepods/checkout');
+      if (m) popAt(m, cg.quota === Infinity ? 'cpu.max: max' : 'cpu.max: 50000 100000 (0.5 CPU)', '#FFE7A8');
+    }
+    else if (a === 'nsview') { nsInside = !nsInside; if (nsInside) complete('ns'); refreshCard(); }
+    refreshLens();
+  });
+
+  // =====================================================================
+  // HUD, facts, tools
+  // =====================================================================
+  function refreshHtop() {
+    const live = procs.filter(p => p.state !== 'Z' || true);
+    const tasks = live.length, thr = live.reduce((s, p) => s + p.thr, 0), running = procs.filter(p => p.state === 'R').length;
+    const up = uptimeBase + clock, d = Math.floor(up / 86400), h = String(Math.floor(up % 86400 / 3600)).padStart(2, '0'), m = String(Math.floor(up % 3600 / 60)).padStart(2, '0');
+    htopEl.innerHTML = `Tasks <b>${tasks}</b>, <b>${thr}</b> thr, <b>${running}</b> running · load <b>${load1.toFixed(2)}</b> ${load5.toFixed(2)} ${load15.toFixed(2)} · Mem <b>${Math.round(memUsed())}</b>/${RAM}M · cache ${Math.round(MEM.cache)}M · Swp ${Math.round(MEM.swapUsed)}/${SWAP}M · cs ${csRate.toFixed(0)}/s · up ${d}d ${h}:${m}`;
+  }
+  const FACTS = [
+    'Most processes spend almost all their time asleep in state S, waiting for something to happen.',
+    'Linux\'s CFS scheduler always runs the task with the smallest vruntime: the one that has had the least CPU so far.',
+    'State D is uninterruptible sleep, usually waiting on disk. Even kill -9 has to wait until the I/O returns.',
+    'After exit, a process stays a zombie until its parent calls wait(). It holds no memory, only an exit status and a PID.',
+    'fork() does not copy memory. Parent and child share pages until one writes, and then only that page is copied.',
+    'Threads share one address space, which is why they are moons of the same planet.',
+    'Load average counts tasks that are running, waiting for a CPU, or stuck in state D.',
+    'Low "free" memory on Linux is normal. The page cache hands memory back the moment programs need it.',
+    'A major page fault reads from disk. A minor fault only fixes up a page table entry from RAM.',
+    'Kubernetes CPU limits are cgroup cpu.max quotas. Hitting the quota means throttling, even when CPUs are idle.',
+    'A container is just a process with its own namespaces. From the host you can see it with ps like any other.',
+    'Orphaned processes are adopted by PID 1 (or the nearest subreaper), which reaps them when they exit.',
+    'SIGKILL and SIGSTOP are the only signals a process cannot catch, block or ignore.',
+    'Interrupt handlers do the minimum. Heavy work is deferred to softirqs, and to ksoftirqd when there is too much of it.'
+  ];
+  let factI = Math.floor(Math.random() * FACTS.length);
+  const factEl = $('fact'), factText = $('factText');
+  factText.textContent = FACTS[factI];
+  setInterval(() => { factEl.style.opacity = 0; setTimeout(() => { factI = (factI + 1) % FACTS.length; factText.textContent = FACTS[factI]; factEl.style.opacity = 1; }, reduced ? 0 : 900); }, 14000);
+
+  $('bSound').addEventListener('click', e => { const on = Sound.toggle(); e.currentTarget.textContent = on ? 'Sound on' : 'Sound off'; e.currentTarget.setAttribute('aria-pressed', on); });
+  $('bFeed').addEventListener('click', () => {
+    const live = procs.filter(p => p.state !== 'Z' && p.state !== 'T' && p.kind !== 'kernel' && !p.oomT);
+    for (let i = 0; i < 6; i++) { const p = pick(live); if (p) dropPellet(p, pick(p.sys.filter(s => s !== 'clone').concat(['read'])), true); }
+    Sound.bubble();
+  });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') { select(null); if (lens) openLens(lens); missionsEl.hidden = true; } });
+
+  // =====================================================================
+  // Camera + input
+  // =====================================================================
+  const cam = { theta: 0.55, phi: 1.22, r: 46, target: new V3(0, -1, 0), goalR: 46 };
+  const goal = new V3(0, -1, 0);
+  let down = null, dragged = false, lastInteract = -99;
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  function pickAt(cx, cy) {
+    const r = canvas.getBoundingClientRect();
+    ndc.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects(pickables, false)[0];
+    return hit ? hit.object.userData.proc : null;
+  }
+  canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, id: e.pointerId }; dragged = false; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', e => {
+    if (down && e.pointerId === down.id) {
+      const dx = e.clientX - down.x, dy = e.clientY - down.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) { dragged = true; canvas.classList.add('dragging'); }
+      if (dragged) { cam.theta -= dx * 0.005; cam.phi = Math.max(0.45, Math.min(1.72, cam.phi - dy * 0.004)); down.x = e.clientX; down.y = e.clientY; lastInteract = clock; }
+      tip.hidden = true; return;
+    }
+    if (e.pointerType !== 'mouse') return;
+    const p = pickAt(e.clientX, e.clientY);
+    canvas.classList.toggle('hovering', !!p);
+    if (p) {
+      const r = tankEl.getBoundingClientRect();
+      const hidden = lens === 'ns' && nsInside && !p.ns;
+      tip.textContent = hidden ? 'not visible from inside the pod' : `${p.comm} · ${shownPid(p)} · ${p.oomT ? 'OOM' : p.onCpu >= 0 ? 'on CPU' + p.onCpu : STATE_TXT[p.state][0]}`;
+      tip.style.left = (e.clientX - r.left) + 'px'; tip.style.top = (e.clientY - r.top) + 'px'; tip.hidden = false;
+    } else tip.hidden = true;
+  });
+  canvas.addEventListener('pointerup', e => {
+    canvas.classList.remove('dragging');
+    if (!down) return; const wasDrag = dragged; down = null;
+    if (wasDrag) return;
+    const p = pickAt(e.clientX, e.clientY);
+    if (p) { select(p); lastInteract = clock; }
+    else if (selected) select(null);
+  });
+  canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); cam.goalR = Math.max(16, Math.min(70, cam.goalR * (1 + Math.sign(e.deltaY) * 0.08))); lastInteract = clock; }, { passive: false });
+
+  function updateCamera(dt) {
+    if (selected && !selected.dead) { goal.copy(posOf(selected)); cam.goalR = Math.min(cam.goalR, 26); }
+    else goal.set(0, -1, 0);
+    if (!reduced && !dragged && clock - lastInteract > 6) cam.theta += dt * 0.025;
+    cam.target.lerp(goal, Math.min(1, dt * 1.6));
+    cam.r += (cam.goalR - cam.r) * Math.min(1, dt * 2);
+    if (!selected && cam.goalR < 34 && clock - lastInteract > 3) cam.goalR += (46 - cam.goalR) * Math.min(1, dt * 0.5);
+    const sp = Math.sin(cam.phi);
+    camera.position.set(cam.target.x + cam.r * sp * Math.sin(cam.theta), cam.target.y + cam.r * Math.cos(cam.phi), cam.target.z + cam.r * sp * Math.cos(cam.theta));
+    camera.lookAt(cam.target);
+  }
+  function resize() {
+    const w = tankEl.clientWidth, h = tankEl.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.fov = w / h < 0.8 ? 64 : 48; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+
+  // =====================================================================
+  // Boot
+  // =====================================================================
+  for (const d of PROCS_DEF) spawnProc(d);
+  procs.forEach((p, i) => { if (i % 3 === 0) p.state = 'R'; });
+  schedTick();
+  resize();
+
+  let last = performance.now(), uiT = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    simulate(dt);
+    movePlanets(dt, clock);
+    updateBeams(dt);
+    updateOverlays(dt, clock);
+    animateScenery(dt, clock);
+    updateCamera(dt);
+    Sound.pad(dt);
+    uiT += dt;
+    if (uiT > 0.3) { uiT = 0; refreshCard(); refreshLens(); refreshHtop(); }
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  window.__kc = { procs, openLens, select, startLeak, signal, forkProc, clockRef: () => clock, MEM, done, step: sec => { for (let i = 0; i < sec / 0.05; i++) { simulate(0.05); movePlanets(0.05, clock); updateBeams(0.05); updateOverlays(0.05, clock); } refreshCard(); refreshLens(); refreshHtop(); } };
+})();
+</script>
+</body>
+</html>

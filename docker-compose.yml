@@ -1,0 +1,10 @@
+services:
+  play-string-wise:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: play-string-wise
+    ports:
+      - "3007:80"
+    restart: unless-stopped
+    init: true

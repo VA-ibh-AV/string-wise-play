@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@play/engine": ["packages/engine/src/index.ts"],
+      "@play/three-kit": ["packages/three-kit/src/index.ts"],
+      "@play/audio": ["packages/audio/src/index.ts"],
+      "@play/ui": ["packages/ui/src/index.ts"],
+      "@play/progress": ["packages/progress/src/index.ts"]
+    }
+  },
+  "include": ["src", "packages", "vite.config.ts"]
+}

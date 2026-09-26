@@ -1,0 +1,16 @@
+export const FACTS = [
+  'Most processes spend almost all their time asleep in state S, waiting for something to happen.',
+  "Linux's CFS scheduler always runs the task with the smallest vruntime: the one that has had the least CPU so far.",
+  'State D is uninterruptible sleep, usually waiting on disk. Even kill -9 has to wait until the I/O returns.',
+  'After exit, a process stays a zombie until its parent calls wait(). It holds no memory, only an exit status and a PID.',
+  'fork() does not copy memory. Parent and child share pages until one writes, and then only that page is copied.',
+  'Threads share one address space, which is why they are moons of the same planet.',
+  'Load average counts tasks that are running, waiting for a CPU, or stuck in state D.',
+  'Low "free" memory on Linux is normal. The page cache hands memory back the moment programs need it.',
+  'A major page fault reads from disk. A minor fault only fixes up a page table entry from RAM.',
+  'Kubernetes CPU limits are cgroup cpu.max quotas. Hitting the quota means throttling, even when CPUs are idle.',
+  'A container is just a process with its own namespaces. From the host you can see it with ps like any other.',
+  'Orphaned processes are adopted by PID 1 (or the nearest subreaper), which reaps them when they exit.',
+  'SIGKILL and SIGSTOP are the only signals a process cannot catch, block or ignore.',
+  'Interrupt handlers do the minimum. Heavy work is deferred to softirqs, and to ksoftirqd when there is too much of it.',
+];

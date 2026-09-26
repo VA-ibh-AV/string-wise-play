@@ -1,0 +1,47 @@
+/* One deliberate look: a quiet star system at night. Single dark theme on purpose. */
+:root {
+  color-scheme: dark;
+  --deep: #04040e;
+  --glass: rgba(12, 12, 34, 0.7);
+  --glass-edge: rgba(180, 186, 255, 0.18);
+  --text: #eceefa;
+  --muted: #a3a8cc;
+  --faint: #6d7299;
+  --sun: #ffe7a8;
+  --run: #9ef0b8;
+  --sleep: #8fc3ff;
+  --disk: #ffb38a;
+  --stop: #b7c4e0;
+  --zombie: #c9c2d6;
+  --rt: #ff8a7a;
+  --cache: #8fb8ff;
+  --display: 'Bricolage Grotesque', 'Avenir Next', system-ui, sans-serif;
+  --body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--deep); color: var(--text); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+a { color: var(--sun); }
+code, .mono { font-family: var(--mono); }
+button {
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 7px 13px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+button:hover:not(:disabled) { background: rgba(30, 30, 80, 0.85); border-color: rgba(180, 186, 255, 0.45); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button[aria-pressed='true'] { border-color: var(--sun); color: var(--sun); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.loading { min-height: 100%; display: grid; place-content: center; gap: 8px; text-align: center; color: var(--muted); }
