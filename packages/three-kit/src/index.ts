@@ -286,3 +286,6 @@ export class OrbitFollowCamera {
     return this.el;
   }
 }
+
+export { createBloom } from './bloom';
+export { planetMaterial, atmosphereMaterial, beamMaterial, nebulaCloud, laneMaterial, flareTexture } from './shaders';
