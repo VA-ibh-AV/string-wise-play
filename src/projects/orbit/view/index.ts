@@ -202,7 +202,7 @@ export function createOrbitView(canvas: HTMLCanvasElement, sys: OrbitSystem, opt
         let m = meshes.get(p.id);
         if (!m) meshes.set(p.id, (m = make(p)));
         const a = p.angle - omega(sys, p) * (sys.t - simNow);
-        m.r += (RINGS[p.ring] - m.r) * Math.min(1, dt * (sys.mode === 'live' ? 1.2 : 30));
+        m.r += (RINGS[p.ring] - m.r) * Math.min(1, dt * (sys.mode === 'live' ? 0.6 : 30));
         m.grow = Math.min(1, m.grow + dt * 0.8);
         toXZ(m.r, a, m.pos);
         m.group.position.copy(m.pos);

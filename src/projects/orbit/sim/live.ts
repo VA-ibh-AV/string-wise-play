@@ -13,10 +13,14 @@ export interface LiveFeed {
   procs: Map<number, Proc>;
   cpus: Cpu[];
   viewers: number;
-  /** Error-diffusion accumulator per core: a 25%-busy core plays every 4th slice. */
-  acc: number[];
+  /** Error-diffusion accumulator for the note density. */
+  acc: number;
   /** Smoothed CPU (cores) per vpid, so rankings don't jump every second. */
   smooth: Map<number, number>;
+  /** Stable short numbers for processes whose name the agent hides. */
+  hidden: Map<number, number>;
+  /** Feed updates since the rings were last re-sorted. */
+  sinceRings: number;
 }
 
 export interface LiveInfo {
@@ -30,15 +34,27 @@ export interface LiveInfo {
 /** A newcomer replaces the quietest planet only when it is this much busier. */
 export const SWAP_RATIO = 1.5;
 /** Smallest share used for stride scheduling, so idle planets still sing now and then. */
-const MIN_SHARE = 0.003;
+const MIN_SHARE = 0.01;
+/** Notes per slice on an idle machine and on a fully busy one: always calm, never silent. */
+export const DENSITY_IDLE = 0.22;
+export const DENSITY_BUSY = 0.8;
+/** Live plays slower than the Sandbox. */
+export const LIVE_BPM = 64;
+/** Rings are re-sorted only this often (feed updates, about seconds), so planets rarely move. */
+const RING_EVERY = 6;
+/** Scale steps handed out to new planets: low and consonant first. */
+const NOTE_SLOTS = [2, 4, 0, 5, 3, 7, 1, 6, 8, 9];
 
-export const createFeed = (): LiveFeed => ({ host: null, procs: new Map(), cpus: [], viewers: 0, acc: [], smooth: new Map() });
+export const createFeed = (): LiveFeed => ({
+  host: null, procs: new Map(), cpus: [], viewers: 0, acc: 0, smooth: new Map(), hidden: new Map(), sinceRings: RING_EVERY,
+});
 
 function smoothAll(f: LiveFeed) {
   for (const id of [...f.smooth.keys()]) if (!f.procs.has(id)) f.smooth.delete(id);
   for (const p of f.procs.values()) {
     const s = f.smooth.get(p.vpid);
-    f.smooth.set(p.vpid, s === undefined ? p.cpu : s * 0.5 + p.cpu * 0.5);
+    // slow average (about 5 s): a short burst doesn't reshuffle the sky
+    f.smooth.set(p.vpid, s === undefined ? p.cpu : s * 0.8 + p.cpu * 0.2);
   }
 }
 
@@ -94,9 +110,15 @@ export const liveNote = (name: string) => 2 + (hash(name + '♪') % 10);
 
 /**
  * The agent sends only allowlisted comm names; everything else arrives as
- * "proc". Tell those apart by their (virtual) id so each gets its own note.
+ * "proc". Those become hidden-1, hidden-2… so each still gets its own planet.
  */
-export const liveName = (p: Proc) => (!p.name || p.name === 'proc' ? `proc-${p.vpid}` : p.name);
+export function liveName(f: LiveFeed, p: Proc) {
+  if (p.name && p.name !== 'proc') return p.name;
+  let n = f.hidden.get(p.vpid);
+  if (n === undefined) f.hidden.set(p.vpid, (n = f.hidden.size + 1));
+  return `hidden-${n}`;
+}
+export const isHidden = (name: string) => /^hidden-\d+$/.test(name);
 
 /** Busier processes orbit closer to the star. */
 function ringFor(rank: number, n: number) {
@@ -119,14 +141,25 @@ export function syncPlanets(sys: OrbitSystem, f: LiveFeed): { born: string[]; go
     }
   }
   const ranked = [...want].sort((a, b) => cpuOf(f, b) - cpuOf(f, a) || a - b);
+  const resort = ++f.sinceRings >= RING_EVERY;
+  if (resort) f.sinceRings = 0;
   for (const vpid of want) {
     const src = f.procs.get(vpid)!;
     let p = sys.planets.find(q => q.live!.vpid === vpid);
     if (!p) {
-      const name = liveName(src);
-      const np = addPlanet(sys, 0, (hash(name + vpid) % 360) * (Math.PI / 180), { note: liveNote(name) }, { name, color: liveColor(name) });
+      // several processes can share a name (chromium, nginx workers): number them
+      const base = liveName(f, src), names = new Set(sys.planets.map(q => q.name));
+      let name = base;
+      for (let i = 2; names.has(name); i++) name = `${base}-${i}`;
+      // a distinct, consonant note and a distinct colour that stay with the planet for its whole life
+      const used = new Set(sys.planets.map(q => q.note));
+      const note = NOTE_SLOTS.find(n => !used.has(n)) ?? liveNote(name);
+      const colors = new Set(sys.planets.map(q => q.color));
+      const color = colors.has(liveColor(base)) ? PALETTE.find(c => !colors.has(c)) ?? liveColor(name) : liveColor(base);
+      const np = addPlanet(sys, 0, (hash(name + vpid) % 360) * (Math.PI / 180), { note }, { name, color });
       if (!np) continue;
       p = np;
+      p.ring = ringFor(ranked.indexOf(vpid), ranked.length);
       born.push(name);
     }
     p.live = {
@@ -135,40 +168,42 @@ export function syncPlanets(sys: OrbitSystem, f: LiveFeed): { born: string[]; go
     p.nice = src.nice ?? 0;
     p.prio = src.policy === 'fifo' || src.policy === 'rr' ? 90 : 50;
     p.moons = Math.max(0, Math.min(3, src.threads - 1));
-    p.ring = ringFor(ranked.indexOf(vpid), ranked.length);
+    if (resort) p.ring = ringFor(ranked.indexOf(vpid), ranked.length);
   }
   return { born, gone };
 }
 
 /**
- * One slice of live music. Each core plays in proportion to how busy it is
- * (scaled down by the CPU that belongs to processes without a planet); the
- * planet that plays is picked by stride scheduling over real CPU shares.
+ * One slice of live music, kept calm on purpose: at most one note per slice.
+ * How often a note plays follows how busy the machine is (sparse when idle,
+ * never silent); which planet plays follows real CPU shares, by stride
+ * scheduling, so over time each planet's share of the notes matches its
+ * share of the CPU.
  */
 export function pickLive(sys: OrbitSystem): OrbitPlanet[] {
   const f = sys.live;
   const ps = sys.planets;
   if (!f || !ps.length) return [];
-  const visible = ps.reduce((s, p) => s + (p.live?.cpu ?? 0), 0);
-  const total = f.cpus.reduce((s, c) => s + c.busy, 0);
-  const frac = total > 0 ? Math.min(1, visible / total) : 0;
-  let voices = 0;
-  f.cpus.forEach((c, i) => {
-    f.acc[i] = (f.acc[i] ?? 0) + c.busy * frac;
-    if (f.acc[i] >= 1) {
-      f.acc[i] -= 1;
-      voices++;
-    }
-  });
-  const chosen: OrbitPlanet[] = [];
-  for (let v = 0; v < Math.min(voices, ps.length); v++) {
-    let best: OrbitPlanet | null = null;
-    for (const p of ps) if (!chosen.includes(p) && (!best || p.vruntime < best.vruntime || (p.vruntime === best.vruntime && p.id < best.id))) best = p;
-    if (!best) break;
-    best.vruntime += 1 / Math.max(MIN_SHARE, best.live?.cpu ?? 0);
-    chosen.push(best);
-  }
-  return chosen;
+  f.acc += density(f);
+  if (f.acc < 1) return [];
+  f.acc -= 1;
+  let best = ps[0];
+  for (const p of ps) if (p.vruntime < best.vruntime || (p.vruntime === best.vruntime && p.id < best.id)) best = p;
+  best.vruntime += 1 / Math.max(MIN_SHARE, best.live?.cpu ?? 0);
+  return [best];
+}
+
+/** Notes per slice: from DENSITY_IDLE (idle host) to DENSITY_BUSY (half the cores busy or more). */
+export function density(f: LiveFeed) {
+  const n = Math.max(1, f.cpus.length);
+  const busy = f.cpus.reduce((s, c) => s + c.busy, 0) / n;
+  return DENSITY_IDLE + (DENSITY_BUSY - DENSITY_IDLE) * Math.min(1, busy * 2);
+}
+
+/** A planet's share of the visible CPU: what its share of the notes tends to. */
+export function liveShare(sys: OrbitSystem, p: OrbitPlanet) {
+  const floor = (q: OrbitPlanet) => Math.max(MIN_SHARE, q.live?.cpu ?? 0);
+  return floor(p) / sys.planets.reduce((s, q) => s + floor(q), 0);
 }
 
 /** A Sandbox preset built from what the live host is doing now, so you can ask "what if". */

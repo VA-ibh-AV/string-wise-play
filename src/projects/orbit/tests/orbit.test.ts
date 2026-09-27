@@ -148,31 +148,44 @@ function liveSystem(procs: Proc[], busy: number[]) {
 }
 
 describe('live', () => {
-  test('a core plays as often as it is busy', () => {
-    const sys = liveSystem([proc(10, 'nginx', 0.25)], [0.25]);
-    expect([...run(sys, 32).values()].reduce((a, b) => a + b, 0)).toBe(8);
-    const idle = liveSystem([proc(10, 'nginx', 0)], [0]);
-    expect(run(idle, 32).size).toBe(0);
+  test('calm by design: never more than one note per slice, sparse when idle', () => {
+    const idle = liveSystem([proc(10, 'nginx', 0), proc(11, 'redis', 0)], [0, 0, 0, 0]);
+    const n = [...run(idle, 100).values()].reduce((a, b) => a + b, 0);
+    expect(n).toBeGreaterThanOrEqual(20); // never silent
+    expect(n).toBeLessThanOrEqual(24);
+    const busy = liveSystem([proc(1, 'a', 3.5), proc(2, 'b', 0.5)], [1, 1, 1, 1]);
+    const events: OrbitEvent[] = [];
+    busy.bus.on('play', e => events.push(e));
+    run(busy, 100);
+    const perSlice = new Map<number, number>();
+    for (const e of events) if (e.type === 'play') perSlice.set(e.at, (perSlice.get(e.at) ?? 0) + 1);
+    expect(Math.max(...perSlice.values())).toBe(1);
+    expect(events.length).toBeGreaterThanOrEqual(78);
+    expect(events.length).toBeLessThanOrEqual(81);
   });
 
-  test('notes follow the real CPU shares', () => {
+  test('share of the notes follows share of the CPU', () => {
     const sys = liveSystem([proc(1, 'a', 0.9), proc(2, 'b', 0.6), proc(3, 'c', 0.3), proc(4, 'd', 0.2)], [1, 1]);
     expect(sys.ncpu).toBe(2);
-    const counts = run(sys, 400);
+    const counts = run(sys, 600);
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
     for (const p of sys.planets) {
-      expect(Math.abs((counts.get(p.id) ?? 0) / 400 - p.live!.cpu)).toBeLessThan(0.08);
-      expect(promised(sys, p)).toBeCloseTo(p.live!.cpu, 5);
+      expect(Math.abs((counts.get(p.id) ?? 0) / total - p.live!.cpu / 2)).toBeLessThan(0.05);
+      expect(Math.abs(measured(sys, p)! - promised(sys, p)!)).toBeLessThan(0.1);
       expect(starved(sys, p)).toBe(false);
     }
-    // busier processes orbit closer to the star
+    // busier processes orbit closer to the star, and notes are distinct
     const byName = (n: string) => sys.planets.find(p => p.name === n)!;
     expect(byName('a').ring).toBeLessThan(byName('d').ring);
+    expect(new Set(sys.planets.map(p => p.note)).size).toBe(4);
   });
 
-  test('CPU used by processes without a planet is silence', () => {
-    // one core fully busy, but the only planet used a quarter of it
-    const sys = liveSystem([proc(1, 'a', 0.25)], [1]);
-    expect(run(sys, 40).get(sys.planets[0].id)).toBe(10);
+  test('hidden names become hidden-1, hidden-2', () => {
+    const sys = liveSystem([proc(7, 'proc', 0.2), proc(9, 'proc', 0.1), proc(3, 'nginx', 0.1)], [1]);
+    expect(sys.planets.map(p => p.name).sort()).toEqual(['hidden-1', 'hidden-2', 'nginx']);
+    const dup = liveSystem([proc(1, 'chromium', 0.3), proc(2, 'chromium', 0.2)], [1]);
+    expect(dup.planets.map(p => p.name).sort()).toEqual(['chromium', 'chromium-2']);
+    expect(new Set(dup.planets.map(p => p.color)).size).toBe(2);
   });
 
   test('at most 8 planets, and newcomers need to be clearly busier', () => {
@@ -186,8 +199,7 @@ describe('live', () => {
     applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.2 } : p)), [1]));
     expect(pickVisible(f, first)).toEqual(first);
     // p1 becomes far busier: it replaces the quietest planet
-    applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.9 } : p)), [1]));
-    applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.9 } : p)), [1]));
+    for (let i = 0; i < 4; i++) applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.9 } : p)), [1]));
     expect(pickVisible(f, first)).toContain(1);
   });
 

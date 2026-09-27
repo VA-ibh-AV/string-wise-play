@@ -184,7 +184,7 @@ function runSlice(sys: OrbitSystem, at: number) {
     chosen.forEach((p, cpu) => {
       p.lastPlayed = sys.slice;
       p.hist.push(sys.slice);
-      if (p.hist.length > 40) p.hist.shift();
+      if (p.hist.length > 80) p.hist.shift();
       sys.bus.emit({ type: 'play', id: p.id, at, cpu, note: p.note, moons: p.moons });
     });
   }

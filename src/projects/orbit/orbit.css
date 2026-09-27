@@ -37,6 +37,8 @@
 .o-facts dt { color: var(--faint); }
 .o-facts dd { margin: 0; color: #dfe1f4; }
 .o-facts small { color: var(--faint); }
+.o-listen { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(176px + env(safe-area-inset-bottom, 0px)); z-index: 4; padding: 10px 22px; font-size: 14px; box-shadow: 0 0 24px rgba(255, 231, 168, 0.25); animation: o-glow 2.8s ease-in-out infinite; }
+@keyframes o-glow { 50% { box-shadow: 0 0 36px rgba(255, 231, 168, 0.45); } }
 .o-remix { display: grid; gap: 2px; width: 100%; margin-top: 10px; text-align: left; }
 .o-remix small { color: var(--muted); font-size: 11px; }
 
@@ -133,6 +135,7 @@
   .o-bars-row { gap: 2px; }
   .o-bar { width: auto; flex: 1; }
   .o-bar-track { height: 48px; }
+  .o-listen { bottom: calc(186px + env(safe-area-inset-bottom, 0px)); }
   .o-hint-top, .o-toast { top: calc(262px + env(safe-area-inset-top, 0px)); }
 }
-@media (prefers-reduced-motion: reduce) { .o-toast, .o-live-dot { animation: none; } .o-bar-fill { transition: none; } .o-side { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .o-toast, .o-live-dot, .o-listen { animation: none; } .o-bar-fill { transition: none; } .o-side { transition: none; } }

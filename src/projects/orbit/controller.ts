@@ -12,7 +12,7 @@ import {
   MAX_PLANETS, type OrbitSystem,
 } from './sim/system';
 import { sliceLen } from './sim/clock';
-import { applyDelta, applyKey, createFeed, remixPreset, syncPlanets } from './sim/live';
+import { applyDelta, applyKey, createFeed, LIVE_BPM, remixPreset, syncPlanets } from './sim/live';
 import { initialOrbit, useOrbit, type OrbitSource } from './store';
 import { createOrbitView, type OrbitView } from './view';
 
@@ -48,6 +48,7 @@ export class OrbitController {
     if (opts.source === 'live') {
       this.sys.mode = 'live';
       this.sys.live = createFeed();
+      this.sys.bpm = LIVE_BPM;
     } else {
       const shared = location.hash.length > 1 ? decodeSystem(location.hash.slice(1)) : null;
       applyPreset(this.sys, shared ?? PRESETS.find(p => p.id === 'fair')!);
@@ -129,12 +130,14 @@ export class OrbitController {
 
   private startLive() {
     const feed = this.sys.live!;
+    let first = true;
     const sync = () => {
       const { born } = syncPlanets(this.sys, feed);
-      // a new planet arrives with a soft, high chime
-      if (born.length && this.sound.on && useOrbit.getState().playing) {
-        born.slice(0, 2).forEach((_, i) => this.sound.bell(midiHz(noteMidi(this.sys.scale, 12 + i)), this.sound.when(this.now + 0.05 + i * 0.12, this.now), 0, 0.03));
+      // a planet that arrives later gets one soft, high chime (not the first eight)
+      if (!first && born.length && this.sound.on && useOrbit.getState().playing) {
+        this.sound.bell(midiHz(noteMidi(this.sys.scale, 12)), this.sound.when(this.now + 0.05, this.now), 0, 0.018);
       }
+      first = false;
       const sel = useOrbit.getState().sel;
       if (sel !== null && !this.sys.planets.some(p => p.id === sel)) this.select(null);
     };
@@ -173,6 +176,11 @@ export class OrbitController {
     const a = p.angle - omega(this.sys, p) * (this.sys.t - e.at);
     const pan = (Math.cos(a) * RINGS[p.ring]) / 15;
     const sc = this.sys.scale;
+    if (this.live) {
+      // live: one soft note, no moon harmonies, so a busy machine stays calm
+      this.sound.bell(midiHz(noteMidi(sc, e.note)), when, pan * 0.6, 0.05);
+      return;
+    }
     this.sound.bell(midiHz(noteMidi(sc, e.note)), when, pan);
     // moons: harmony notes two and four scale steps up, just after
     for (let i = 0; i < e.moons; i++) this.sound.bell(midiHz(noteMidi(sc, e.note + 2 + i * 2)), when + 0.07 * (i + 1), pan, 0.035);

@@ -2,6 +2,7 @@ import { DISCOVERIES } from '../content/discoveries';
 import { PRESETS } from '../content/presets';
 import { noteName, SCALES, type ScaleId } from '../content/scales';
 import { weight } from '../sim/schedulers';
+import { isHidden } from '../sim/live';
 import { measured, promised, starved } from '../sim/shares';
 import { useOrbit } from '../store';
 import { pct, useCtl, useSys } from './context';
@@ -26,7 +27,7 @@ function LivePlanetCard() {
         <span className="o-dot" style={{ background: p.color, color: p.color }} />
         <div>
           <h2>{p.name}{rt && <span className="o-rt">real-time</span>}</h2>
-          <small>a real process · played {m === null ? '–' : pct(m)} of slices · used {pct(p.live.cpu)} of a core</small>
+          <small>a real process · {m === null ? '–' : pct(m)} of the notes · {pct(promised(sys, p) ?? 0)} of the planets' CPU</small>
         </div>
         <button className="o-btn sm ghost" onClick={() => ctl.select(null)} aria-label="Close">✕</button>
       </div>
@@ -38,6 +39,7 @@ function LivePlanetCard() {
         <dt>Threads</dt><dd>{p.live.threads} <small>(moons: up to 3)</small></dd>
         <dt>Note</dt><dd>{noteName(sys.scale, p.note)}</dd>
       </dl>
+      {isHidden(p.name) && <p className="o-hint">Name hidden: this program is not on the agent's allowlist, so its name never leaves the machine.</p>}
       <p className="o-hint">Read-only: this is the real host. Remix it in the Sandbox to change nice values.</p>
     </section>
   );
@@ -175,7 +177,7 @@ export function ShareBars() {
   return (
     <section className="o-bars" aria-label="CPU share over the last 32 slices">
       <h2>
-        {sys.mode === 'free' ? 'No scheduler: nobody is sharing anything' : sys.mode === 'live' ? 'Notes played, last 32 slices · dashed: real CPU' : 'CPU share, last 32 slices'}
+        {sys.mode === 'free' ? 'No scheduler: nobody is sharing anything' : sys.mode === 'live' ? 'Share of the notes · dashed: share of the CPU' : 'CPU share, last 32 slices'}
       </h2>
       <div className="o-bars-row">
         {sys.planets.map((p, i) => {
@@ -240,5 +242,18 @@ export function Intro() {
         <button className="o-btn primary big" onClick={() => ctl.closeIntro()} autoFocus>Start listening</button>
       </div>
     </div>
+  );
+}
+
+/** Browsers only start audio after a tap; make that tap obvious. */
+export function ListenPrompt() {
+  const sound = useOrbit(s => s.sound);
+  const intro = useOrbit(s => s.intro);
+  const ctl = useCtl();
+  if (sound || intro) return null;
+  return (
+    <button className="o-btn primary o-listen" onClick={() => ctl.toggleSound()}>
+      ♪ Tap to listen
+    </button>
   );
 }

@@ -47,10 +47,10 @@ export const SMP_NOTE =
 /** Live mode: the scheduler is the real Linux kernel on the host. */
 export const LIVE_INFO: ModeInfo = {
   id: 'live', label: 'Live', title: 'This machine, right now',
-  hear: 'Busy processes sing more. A quiet machine is a sparse tune.',
-  text: 'Each planet is one of the busiest real processes on a Raspberry Pi, and the scheduler is the real Linux kernel. The agent measures CPU use once a second; each core plays a note in a slice as often as it is busy, and the note goes to a process in proportion to the CPU it really used. Real time slices are milliseconds, so this is the schedule slowed down and sampled, not every context switch.',
+  hear: 'A slow, soft tune. Busy processes sing more often.',
+  text: 'Each planet is one of the busiest real processes on a Raspberry Pi, and the scheduler is the real Linux kernel. The agent measures CPU use once a second. Notes come more often when the machine is busier, and each note goes to a process in proportion to the CPU it really used. Real time slices are milliseconds, so this is the schedule slowed right down: a summary you can listen to, not every context switch.',
   tries: [
-    'Watch the bars: the solid bar is how often the planet played, the dashed line is its real CPU.',
+    'Watch the bars: the solid bar is the planet\'s share of the notes, the dashed line its share of the CPU.',
     'Tap a planet to see its real nice value, policy and threads.',
     'Press Remix in Sandbox, then give one process nice −10 and hear what would happen.',
   ],

@@ -1,3 +1,4 @@
+import { liveShare } from './live';
 import { weight } from './schedulers';
 import type { OrbitPlanet, OrbitSystem } from './system';
 
@@ -9,6 +10,12 @@ export const scheduled = (sys: OrbitSystem) => sys.mode !== 'free';
 /** Share of the last 32 slices this planet actually ran in (null in free orbits). */
 export function measured(sys: OrbitSystem, p: OrbitPlanet): number | null {
   if (!scheduled(sys)) return null;
+  if (sys.mode === 'live') {
+    // live plays at most one note per slice: share of the notes, not of the slices
+    const since = sys.slice - WINDOW * 2;
+    const all = sys.planets.reduce((s, q) => s + q.hist.filter(x => x >= since).length, 0);
+    return all ? p.hist.filter(x => x >= since).length / all : 0;
+  }
   const since = sys.slice - WINDOW;
   const n = p.hist.filter(s => s >= since).length;
   const span = Math.min(WINDOW, Math.max(1, sys.slice - Math.max(p.bornSlice, since)));
@@ -23,8 +30,8 @@ export function promised(sys: OrbitSystem, p: OrbitPlanet): number | null {
     case 'free':
       return null;
     case 'live':
-      // the real CPU the process used, in cores (the agent's 1 s sample)
-      return p.live ? Math.min(1, p.live.cpu) : null;
+      // its share of the CPU used by all the planets (the agent's 1 s samples)
+      return p.live ? liveShare(sys, p) : null;
     case 'rr':
       return Math.min(1, c / N);
     case 'cfs': {

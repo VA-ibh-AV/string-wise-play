@@ -5,7 +5,7 @@ import { useOrbit, type OrbitSource } from './store';
 import { OrbitCtx } from './ui/context';
 import { LiveBadge, OfflineBanner } from './ui/LiveBits';
 import { ModeCard } from './ui/ModeCard';
-import { Hint, Intro, ShareBars, SidePanel, Toast } from './ui/Side';
+import { Hint, Intro, ListenPrompt, ShareBars, SidePanel, Toast } from './ui/Side';
 import { TopBar } from './ui/Top';
 import './orbit.css';
 
@@ -128,6 +128,7 @@ export default function OrbitSynth() {
           <SidePanel onRemix={remix} />
           <ShareBars />
           <Hint />
+          <ListenPrompt />
           <Toast />
           <Intro />
         </OrbitCtx.Provider>
