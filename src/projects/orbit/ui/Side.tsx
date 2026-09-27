@@ -6,12 +6,50 @@ import { measured, promised, starved } from '../sim/shares';
 import { useOrbit } from '../store';
 import { pct, useCtl, useSys } from './context';
 
+const POLICY: Record<string, string> = {
+  normal: 'SCHED_OTHER (CFS)', batch: 'SCHED_BATCH', idle: 'SCHED_IDLE', fifo: 'SCHED_FIFO (real-time)', rr: 'SCHED_RR (real-time)',
+};
+const STATE: Record<string, string> = { R: 'running', S: 'sleeping', D: 'waiting on I/O', T: 'stopped', Z: 'zombie' };
+
+/** A real process: read-only facts from the agent. */
+function LivePlanetCard() {
+  const sys = useSys();
+  const ctl = useCtl();
+  const sel = useOrbit(s => s.sel);
+  const p = sys.planets.find(q => q.id === sel);
+  if (!p?.live) return null;
+  const m = measured(sys, p);
+  const rt = p.live.policy === 'fifo' || p.live.policy === 'rr';
+  return (
+    <section className="o-card o-planet" aria-label={`Process ${p.name}`}>
+      <div className="o-card-head">
+        <span className="o-dot" style={{ background: p.color, color: p.color }} />
+        <div>
+          <h2>{p.name}{rt && <span className="o-rt">real-time</span>}</h2>
+          <small>a real process · played {m === null ? '–' : pct(m)} of slices · used {pct(p.live.cpu)} of a core</small>
+        </div>
+        <button className="o-btn sm ghost" onClick={() => ctl.select(null)} aria-label="Close">✕</button>
+      </div>
+      <dl className="o-facts">
+        <dt>CPU</dt><dd>{(p.live.cpu * 100).toFixed(1)}% of one core</dd>
+        <dt>nice</dt><dd>{p.nice > 0 ? '+' + p.nice : p.nice} <small>weight {Math.round(weight(p.nice))}</small></dd>
+        <dt>Policy</dt><dd>{POLICY[p.live.policy] ?? p.live.policy}</dd>
+        <dt>State</dt><dd>{STATE[p.live.state] ?? p.live.state}</dd>
+        <dt>Threads</dt><dd>{p.live.threads} <small>(moons: up to 3)</small></dd>
+        <dt>Note</dt><dd>{noteName(sys.scale, p.note)}</dd>
+      </dl>
+      <p className="o-hint">Read-only: this is the real host. Remix it in the Sandbox to change nice values.</p>
+    </section>
+  );
+}
+
 function PlanetCard() {
   const sys = useSys();
   const ctl = useCtl();
   const sel = useOrbit(s => s.sel);
   const p = sys.planets.find(q => q.id === sel);
   if (!p) return null;
+  if (sys.mode === 'live') return <LivePlanetCard />;
   const m = measured(sys, p), pr = promised(sys, p);
   return (
     <section className="o-card o-planet" aria-label={`Task ${p.name}`}>
@@ -61,8 +99,9 @@ function PlanetCard() {
   );
 }
 
-function Controls() {
+function Controls({ onRemix }: { onRemix: () => void }) {
   const sys = useSys();
+  const live = sys.mode === 'live';
   const ctl = useCtl();
   const copied = useOrbit(s => s.copied);
   const found = useOrbit(s => s.found);
@@ -84,16 +123,25 @@ function Controls() {
           <span>RT throttling (95%)<small>Real-time tasks may use only 95% of the CPU; the rest can sneak in.</small></span>
         </label>
       )}
-      <h3>Presets</h3>
-      <div className="o-presets">
-        {PRESETS.map(p => (
-          <button key={p.id} className="o-btn" onClick={() => ctl.preset(p)}>
-            {p.name}
-            <small>{p.blurb}</small>
-          </button>
-        ))}
-      </div>
-      <button className="o-btn" onClick={() => ctl.copyLink()}>{copied ? 'Link copied' : 'Copy a link to this system'}</button>
+      {live ? (
+        <button className="o-btn primary o-remix" onClick={onRemix} disabled={!sys.planets.length}>
+          Remix in Sandbox
+          <small>Copy these processes into the Sandbox and change their nice values</small>
+        </button>
+      ) : (
+        <>
+          <h3>Presets</h3>
+          <div className="o-presets">
+            {PRESETS.map(p => (
+              <button key={p.id} className="o-btn" onClick={() => ctl.preset(p)}>
+                {p.name}
+                <small>{p.blurb}</small>
+              </button>
+            ))}
+          </div>
+          <button className="o-btn" onClick={() => ctl.copyLink()}>{copied ? 'Link copied' : 'Copy a link to this system'}</button>
+        </>
+      )}
       <h3>Discoveries <span>{found.length}/{DISCOVERIES.length}</span></h3>
       <ul className="o-found">
         {DISCOVERIES.map(d => (
@@ -107,13 +155,13 @@ function Controls() {
   );
 }
 
-export function SidePanel() {
+export function SidePanel({ onRemix }: { onRemix: () => void }) {
   const sheet = useOrbit(s => s.sheet);
   return (
     <aside className={`o-side ${sheet ? 'open' : ''}`} aria-label="Task and controls">
       <button className="o-handle" aria-expanded={sheet} aria-label="Show or hide controls" onClick={() => useOrbit.setState({ sheet: !sheet })}><span /></button>
       <PlanetCard />
-      <Controls />
+      <Controls onRemix={onRemix} />
     </aside>
   );
 }
@@ -126,7 +174,9 @@ export function ShareBars() {
   if (!sys.planets.length) return null;
   return (
     <section className="o-bars" aria-label="CPU share over the last 32 slices">
-      <h2>{sys.mode === 'free' ? 'No scheduler: nobody is sharing anything' : 'CPU share, last 32 slices'}</h2>
+      <h2>
+        {sys.mode === 'free' ? 'No scheduler: nobody is sharing anything' : sys.mode === 'live' ? 'Notes played, last 32 slices · dashed: real CPU' : 'CPU share, last 32 slices'}
+      </h2>
       <div className="o-bars-row">
         {sys.planets.map((p, i) => {
           const m = measured(sys, p), pr = promised(sys, p), st = starved(sys, p);
@@ -148,6 +198,12 @@ export function ShareBars() {
 
 export function Hint() {
   const sys = useSys();
+  const connection = useOrbit(s => s.connection);
+  if (sys.mode === 'live') {
+    // the badge already says when the host is offline
+    if (sys.planets.length || connection === 'offline') return null;
+    return <p className="o-hint-top">Listening for the live host…</p>;
+  }
   if (sys.planets.length >= 3) return null;
   return <p className="o-hint-top">{sys.planets.length === 0 ? 'Tap an empty orbit to add a planet.' : 'Tap another orbit to add more planets.'}</p>;
 }
@@ -178,6 +234,7 @@ export function Intro() {
           <li><span>1</span>Each planet is a task: nginx, postgres, redis… The star in the middle is the CPU.</li>
           <li><span>2</span>Every time a task gets the CPU, it plays its note. So the melody is the schedule.</li>
           <li><span>3</span>Switch the scheduler at the top and <b>hear</b> fairness, nice values, priorities and starvation. The bars at the bottom show who really got the CPU.</li>
+          <li><span>4</span><b>Live</b> plays a real Raspberry Pi: its busiest processes are the planets, and the real Linux scheduler writes the tune.</li>
         </ol>
         <p className="o-small">Tap an empty orbit to add a planet, tap a planet to change it, drag to move it. Headphones recommended.</p>
         <button className="o-btn primary big" onClick={() => ctl.closeIntro()} autoFocus>Start listening</button>

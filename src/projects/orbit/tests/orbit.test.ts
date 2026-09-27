@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest';
+import type { Key, Proc } from '@play/protocol';
+import { applyDelta, applyKey, createFeed, pickVisible, remixPreset, syncPlanets } from '../sim/live';
 import { PRESETS } from '../content/presets';
 import { sliceLen } from '../sim/clock';
 import { measured, promised, starved } from '../sim/shares';
@@ -124,5 +126,103 @@ describe('free orbits and shares', () => {
     expect(back.mode).toBe('cfs');
     expect(back.planets.map(p => p.nice)).toEqual(sys.planets.map(p => p.nice));
     expect(decodeSystem('not-base64!!')).toBeNull();
+  });
+});
+
+// ---------- live mode ----------
+const proc = (vpid: number, name: string, cpu: number, o: Partial<Proc> = {}): Proc => ({
+  vpid, ppid: 1, name, kind: 'user', state: 'S', threads: 1, cpu, rssBytes: 0, minflt: 0, majflt: 0, ctxVol: 0, ctxInvol: 0, sysRate: 0, topSys: [], ...o,
+});
+const key = (procs: Proc[], busy: number[], seq = 1): Key => ({
+  t: 'key', seq, ts: 0, viewers: 2, load: [0, 0, 0], cpus: busy.map((b, i) => ({ id: i, busy: b, vpid: null, switches: 0 })),
+  procs, other: { count: 0, cpu: 0, rssBytes: 0 }, mem: { total: 0, used: 0, cached: 0, dirty: 0, writeback: 0, swapUsed: 0, swapTotal: 0 },
+  irq: [], cgroups: [], conns: [], events: [],
+});
+function liveSystem(procs: Proc[], busy: number[]) {
+  const sys = createSystem();
+  sys.mode = 'live';
+  sys.live = createFeed();
+  applyKey(sys.live, key(procs, busy));
+  syncPlanets(sys, sys.live);
+  return sys;
+}
+
+describe('live', () => {
+  test('a core plays as often as it is busy', () => {
+    const sys = liveSystem([proc(10, 'nginx', 0.25)], [0.25]);
+    expect([...run(sys, 32).values()].reduce((a, b) => a + b, 0)).toBe(8);
+    const idle = liveSystem([proc(10, 'nginx', 0)], [0]);
+    expect(run(idle, 32).size).toBe(0);
+  });
+
+  test('notes follow the real CPU shares', () => {
+    const sys = liveSystem([proc(1, 'a', 0.9), proc(2, 'b', 0.6), proc(3, 'c', 0.3), proc(4, 'd', 0.2)], [1, 1]);
+    expect(sys.ncpu).toBe(2);
+    const counts = run(sys, 400);
+    for (const p of sys.planets) {
+      expect(Math.abs((counts.get(p.id) ?? 0) / 400 - p.live!.cpu)).toBeLessThan(0.08);
+      expect(promised(sys, p)).toBeCloseTo(p.live!.cpu, 5);
+      expect(starved(sys, p)).toBe(false);
+    }
+    // busier processes orbit closer to the star
+    const byName = (n: string) => sys.planets.find(p => p.name === n)!;
+    expect(byName('a').ring).toBeLessThan(byName('d').ring);
+  });
+
+  test('CPU used by processes without a planet is silence', () => {
+    // one core fully busy, but the only planet used a quarter of it
+    const sys = liveSystem([proc(1, 'a', 0.25)], [1]);
+    expect(run(sys, 40).get(sys.planets[0].id)).toBe(10);
+  });
+
+  test('at most 8 planets, and newcomers need to be clearly busier', () => {
+    const procs = Array.from({ length: 12 }, (_, i) => proc(i + 1, `p${i + 1}`, 0.1 + i * 0.01));
+    const f = createFeed();
+    applyKey(f, key(procs, [1]));
+    const first = pickVisible(f, []);
+    expect(first).toHaveLength(8);
+    expect(first).not.toContain(1);
+    // p1 gets a little busier than the quietest planet: no swap
+    applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.2 } : p)), [1]));
+    expect(pickVisible(f, first)).toEqual(first);
+    // p1 becomes far busier: it replaces the quietest planet
+    applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.9 } : p)), [1]));
+    applyKey(f, key(procs.map(p => (p.vpid === 1 ? { ...p, cpu: 0.9 } : p)), [1]));
+    expect(pickVisible(f, first)).toContain(1);
+  });
+
+  test('born and died processes add and remove planets', () => {
+    const sys = liveSystem([proc(1, 'a', 0.3), proc(2, 'b', 0.2)], [0.5]);
+    applyDelta(sys.live!, {
+      t: 'delta', seq: 2, ts: 0, viewers: 1, load: [0, 0, 0], cpus: [{ id: 0, busy: 0.5, vpid: null, switches: 0 }],
+      born: [proc(3, 'c', 0.1, { policy: 'fifo', nice: -5, threads: 4 })], died: [1], changed: [{ vpid: 2, cpu: 0.4 }],
+      other: { count: 0, cpu: 0, rssBytes: 0 }, mem: { total: 0, used: 0, cached: 0, dirty: 0, writeback: 0, swapUsed: 0, swapTotal: 0 },
+      irq: [], cgroups: [], connsAdded: [], connsRemoved: [], events: [],
+    });
+    const { born, gone } = syncPlanets(sys, sys.live!);
+    expect(born).toEqual(['c']);
+    expect(gone).toEqual(['a']);
+    const c = sys.planets.find(p => p.name === 'c')!;
+    expect(c.live!.policy).toBe('fifo');
+    expect(c.nice).toBe(-5);
+    expect(c.moons).toBe(3);
+  });
+
+  test('a remix is a valid Sandbox system that keeps the real names', () => {
+    const sys = liveSystem([proc(1, 'nginx', 0.3), proc(2, 'kworker/0:1', 0.2, { nice: 5 })], [1, 1, 1, 1]);
+    const pr = remixPreset(sys);
+    expect(pr.mode).toBe('cfs');
+    expect(pr.ncpu).toBe(2);
+    const back = decodeSystem(encodeSystem((() => {
+      const s = createSystem();
+      applyPreset(s, pr);
+      return s;
+    })()))!;
+    expect(back.planets.map(p => p.nice).sort()).toEqual([0, 5]);
+    // names that are safe survive the link; others fall back to a default task name
+    expect(back.planets.some(p => p.name === 'kworker/0:1')).toBe(false);
+    const s2 = createSystem();
+    applyPreset(s2, back);
+    expect(s2.planets.map(p => p.name)).toContain('nginx');
   });
 });

@@ -3,6 +3,7 @@ import type { ModeId } from '../content/modes';
 import type { Preset } from '../content/presets';
 import type { ScaleId } from '../content/scales';
 import { period, sliceLen } from './clock';
+import { liveColor, pickLive, type LiveFeed, type LiveInfo } from './live';
 import { pickCFS, pickPrio, pickRR } from './schedulers';
 
 export const RINGS = [4.5, 6.5, 8.5, 10.5, 12.5, 14.5];
@@ -29,6 +30,8 @@ export interface OrbitPlanet {
   bornSlice: number;
   /** Slice numbers it ran in (last 32 kept). */
   hist: number[];
+  /** Live mode: the real process behind this planet. */
+  live?: LiveInfo;
 }
 
 export type OrbitEvent =
@@ -40,7 +43,8 @@ export interface OrbitSystem {
   planets: OrbitPlanet[];
   nextId: number;
   mode: ModeId;
-  ncpu: 1 | 2;
+  /** 1 or 2 in the Sandbox; the host's core count in Live. */
+  ncpu: number;
   bpm: number;
   scale: ScaleId;
   rtLimit: boolean;
@@ -49,11 +53,13 @@ export interface OrbitSystem {
   slice: number;
   nextSliceAt: number;
   rr: number;
+  /** Live mode only. */
+  live: LiveFeed | null;
   bus: Bus<OrbitEvent>;
 }
 
 export function createSystem(): OrbitSystem {
-  return { planets: [], nextId: 1, mode: 'cfs', ncpu: 1, bpm: 96, scale: 'majpenta', rtLimit: false, t: 0, slice: 0, nextSliceAt: 0, rr: 0, bus: createBus() };
+  return { planets: [], nextId: 1, mode: 'cfs', ncpu: 1, bpm: 96, scale: 'majpenta', rtLimit: false, t: 0, slice: 0, nextSliceAt: 0, rr: 0, live: null, bus: createBus() };
 }
 
 export const omega = (sys: OrbitSystem, p: OrbitPlanet) => (Math.PI * 2) / period(RINGS[p.ring], sys.bpm);
@@ -71,10 +77,13 @@ function resetShares(sys: OrbitSystem) {
   sys.rr = 0;
 }
 
-export function addPlanet(sys: OrbitSystem, ring: number, angle: number, o: Partial<Pick<OrbitPlanet, 'note' | 'nice' | 'prio' | 'moons'>> = {}): OrbitPlanet | null {
+export function addPlanet(
+  sys: OrbitSystem, ring: number, angle: number, o: Partial<Pick<OrbitPlanet, 'note' | 'nice' | 'prio' | 'moons'>> = {}, named?: { name: string; color?: string },
+): OrbitPlanet | null {
   if (sys.planets.length >= MAX_PLANETS) return null;
   const used = new Set(sys.planets.map(p => p.name));
-  const task = TASKS.find(t => !used.has(t.name)) ?? TASKS[sys.nextId % TASKS.length];
+  const pick = TASKS.find(t => !used.has(t.name)) ?? TASKS[sys.nextId % TASKS.length];
+  const task = named ? { name: named.name, color: named.color ?? TASKS.find(t => t.name === named.name)?.color ?? liveColor(named.name) } : pick;
   // CFS: a new task starts at the smallest vruntime, so it cannot hog the CPU
   const minV = sys.planets.length ? Math.min(...sys.planets.map(p => p.vruntime)) : 0;
   const p: OrbitPlanet = {
@@ -120,7 +129,7 @@ export function applyPreset(sys: OrbitSystem, pr: Preset) {
   sys.bpm = pr.bpm;
   sys.scale = pr.scale;
   sys.rtLimit = pr.rtLimit ?? false;
-  for (const s of pr.planets) addPlanet(sys, s.ring, (s.angle * Math.PI) / 180, s);
+  for (const s of pr.planets) addPlanet(sys, s.ring, (s.angle * Math.PI) / 180, s, s.name ? { name: s.name } : undefined);
   resetShares(sys);
   sys.nextSliceAt = sys.t;
   changed(sys);
@@ -164,7 +173,8 @@ export function advance(sys: OrbitSystem, until: number) {
 function runSlice(sys: OrbitSystem, at: number) {
   if (sys.planets.length) {
     let chosen: OrbitPlanet[];
-    if (sys.mode === 'rr') chosen = pickRR(sys);
+    if (sys.mode === 'live') chosen = pickLive(sys);
+    else if (sys.mode === 'rr') chosen = pickRR(sys);
     else if (sys.mode === 'cfs') chosen = pickCFS(sys);
     else {
       const r = pickPrio(sys);
@@ -185,7 +195,7 @@ function runSlice(sys: OrbitSystem, at: number) {
 export function encodeSystem(sys: OrbitSystem): string {
   const data = {
     m: sys.mode, c: sys.ncpu, b: sys.bpm, s: sys.scale, r: sys.rtLimit ? 1 : 0,
-    p: sys.planets.map(p => [p.ring, Math.round((p.angle * 180) / Math.PI), p.note, p.nice, p.prio, p.moons]),
+    p: sys.planets.map(p => [p.ring, Math.round((p.angle * 180) / Math.PI), p.note, p.nice, p.prio, p.moons, ...(TASKS.some(t => t.name === p.name) ? [] : [p.name])]),
   };
   return btoa(JSON.stringify(data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -200,6 +210,7 @@ export function decodeSystem(hash: string): Preset | null {
       bpm: num(d.b, 50, 160, 96), scale: ['majpenta', 'minpenta', 'hirajoshi', 'lydian'].includes(d.s) ? d.s : 'majpenta', rtLimit: d.r === 1,
       planets: d.p.map((q: unknown[]) => ({
         ring: num(q[0], 0, 5, 0), angle: num(q[1], -720, 720, 0), note: num(q[2], 0, 20, 4), nice: num(q[3], -20, 19, 0), prio: num(q[4], 1, 99, 50), moons: num(q[5], 0, 3, 0),
+        name: typeof q[6] === 'string' && /^[\w.:@+-]{1,15}$/.test(q[6]) ? q[6] : undefined,
       })),
     };
   } catch {

@@ -1,4 +1,4 @@
-export type ModeId = 'free' | 'rr' | 'cfs' | 'prio';
+export type ModeId = 'free' | 'rr' | 'cfs' | 'prio' | 'live';
 
 export interface ModeInfo {
   id: ModeId;
@@ -43,3 +43,16 @@ export const MODES: ModeInfo[] = [
 
 export const SMP_NOTE =
   'With 2 CPUs, two tasks run in every slice (two notes). More cores means more tasks per slice. With priority, the second core goes to the next-highest task.';
+
+/** Live mode: the scheduler is the real Linux kernel on the host. */
+export const LIVE_INFO: ModeInfo = {
+  id: 'live', label: 'Live', title: 'This machine, right now',
+  hear: 'Busy processes sing more. A quiet machine is a sparse tune.',
+  text: 'Each planet is one of the busiest real processes on a Raspberry Pi, and the scheduler is the real Linux kernel. The agent measures CPU use once a second; each core plays a note in a slice as often as it is busy, and the note goes to a process in proportion to the CPU it really used. Real time slices are milliseconds, so this is the schedule slowed down and sampled, not every context switch.',
+  tries: [
+    'Watch the bars: the solid bar is how often the planet played, the dashed line is its real CPU.',
+    'Tap a planet to see its real nice value, policy and threads.',
+    'Press Remix in Sandbox, then give one process nice −10 and hear what would happen.',
+  ],
+  cmds: ['top', 'ps -eo pid,comm,ni,cls,psr,pcpu --sort=-pcpu | head', 'chrt -p PID           # scheduling policy and priority'],
+};

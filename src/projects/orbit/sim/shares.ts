@@ -22,6 +22,9 @@ export function promised(sys: OrbitSystem, p: OrbitPlanet): number | null {
   switch (sys.mode) {
     case 'free':
       return null;
+    case 'live':
+      // the real CPU the process used, in cores (the agent's 1 s sample)
+      return p.live ? Math.min(1, p.live.cpu) : null;
     case 'rr':
       return Math.min(1, c / N);
     case 'cfs': {
@@ -54,5 +57,6 @@ export function promised(sys: OrbitSystem, p: OrbitPlanet): number | null {
 }
 
 export function starved(sys: OrbitSystem, p: OrbitPlanet) {
-  return scheduled(sys) && sys.slice - Math.max(p.lastPlayed, p.bornSlice) >= STARVE_AFTER;
+  // live processes that barely use the CPU are idle, not starved
+  return scheduled(sys) && sys.mode !== 'live' && sys.slice - Math.max(p.lastPlayed, p.bornSlice) >= STARVE_AFTER;
 }

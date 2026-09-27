@@ -4,4 +4,5 @@ export const DISCOVERIES = [
   { id: 'starve', title: 'Starvation', how: 'In Priority mode, starve a planet: 16 slices without the CPU.' },
   { id: 'rescue', title: 'RT throttling', how: 'Turn on RT throttling and hear a starved planet sneak in.' },
   { id: 'cores', title: 'Two cores', how: 'Run 4+ planets on 2 CPUs under a scheduler.' },
+  { id: 'live', title: 'A real machine', how: 'Listen to the Live host for 30 seconds.' },
 ];

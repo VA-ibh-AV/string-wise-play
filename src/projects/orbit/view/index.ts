@@ -38,6 +38,10 @@ interface PlanetMesh {
   pos: THREE.Vector3;
   color: THREE.Color;
   name: string;
+  /** Drawn radius: eases toward the planet's ring, so live planets glide. */
+  r: number;
+  /** 0..1 fade-in when it appears. */
+  grow: number;
 }
 
 /** Angle in the orbital plane → world position (+x is the play line). */
@@ -77,8 +81,8 @@ export function createOrbitView(canvas: HTMLCanvasElement, sys: OrbitSystem, opt
   const playLineMat = new THREE.LineBasicMaterial({ color: 0xffe7a8, transparent: true, opacity: 0, blending: ADD, depthWrite: false });
   scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(1.8, 0, 0), new THREE.Vector3(RINGS[RINGS.length - 1] + 1.2, 0, 0)]), playLineMat));
 
-  // ---- CPU beams, one per core ----
-  const beams = [0, 1].map(() => {
+  // ---- CPU beams, one per core (up to 8 on a live host) ----
+  const beams = Array.from({ length: 8 }, () => {
     const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
     const m = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: ADD, depthWrite: false });
     const line = new THREE.Line(geo, m);
@@ -131,7 +135,7 @@ export function createOrbitView(canvas: HTMLCanvasElement, sys: OrbitSystem, opt
     group.add(starve);
     const moonMat = new THREE.MeshStandardMaterial({ color: 0xd8dcef, emissive: new THREE.Color(p.color), emissiveIntensity: 0.3, roughness: 0.8 });
     scene.add(group);
-    return { group, body, mat, atm, halo, label, starve, moons: [], moonMat, flash: 0, pos: new THREE.Vector3(), color: new THREE.Color(p.color), name: p.name };
+    return { group, body, mat, atm, halo, label, starve, moons: [], moonMat, flash: 0, pos: new THREE.Vector3(), color: new THREE.Color(p.color), name: p.name, r: RINGS[p.ring], grow: sys.mode === 'live' ? 0 : 1 };
   }
   function drop(id: number, m: PlanetMesh) {
     scene.remove(m.group);
@@ -178,7 +182,7 @@ export function createOrbitView(canvas: HTMLCanvasElement, sys: OrbitSystem, opt
       if (!m) return;
       m.flash = 1;
       pulse = 1;
-      const b = beams[cpu] ?? beams[0];
+      const b = beams[cpu % beams.length];
       b.id = id;
       b.life = 1;
       b.m.color.copy(m.color);
@@ -198,8 +202,11 @@ export function createOrbitView(canvas: HTMLCanvasElement, sys: OrbitSystem, opt
         let m = meshes.get(p.id);
         if (!m) meshes.set(p.id, (m = make(p)));
         const a = p.angle - omega(sys, p) * (sys.t - simNow);
-        toXZ(RINGS[p.ring], a, m.pos);
+        m.r += (RINGS[p.ring] - m.r) * Math.min(1, dt * (sys.mode === 'live' ? 1.2 : 30));
+        m.grow = Math.min(1, m.grow + dt * 0.8);
+        toXZ(m.r, a, m.pos);
         m.group.position.copy(m.pos);
+        m.group.scale.setScalar(0.2 + 0.8 * m.grow);
         m.flash = Math.max(0, m.flash - dt * 2.4);
         const st = starved(sys, p);
         m.mat.uniforms.uTime.value = opts.reduced ? 0 : t;

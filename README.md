@@ -11,7 +11,7 @@ Each project is a small world you can explore for five minutes between tasks. Th
 | **Kernel Cosmos** | Ported (beta) | `/cosmos` | Linux processes, scheduling, memory, page cache, interrupts, cgroups, namespaces, signals |
 | Goroutine Lanterns | Idea | `/lanterns` | Go channels, `hchan`, select, deadlocks |
 | **Packet Garden** | Ported (beta) | `/garden` | Link-state routing and convergence, load balancing, caching, in a calm 3D sky with generative music |
-| **Orbit Synth** | Ported (beta) | `/orbit` | CPU scheduling you can hear: round robin, CFS and nice, SCHED_FIFO and starvation, RT throttling, two cores |
+| **Orbit Synth** | Ported (beta) | `/orbit` | CPU scheduling you can hear: round robin, CFS and nice, SCHED_FIFO and starvation, RT throttling, two cores; Live mode plays the real host from cosmos-agent |
 | Consensus Choir | Idea | `/choir` | Raft leader election and log replication, as sound |
 | Data Structure Zen Garden | Idea | `/zen` | B-trees, hash rings, heaps |
 | **Packet Drift** | Ported (beta) | `/drift` | Fly one HTTPS request: DNS, the TCP handshake, TLS, NAT, TTL, BGP, the load balancer, the kernel and nginx |

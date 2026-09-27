@@ -8,6 +8,8 @@ export interface PlanetSeed {
   nice?: number;
   prio?: number;
   moons?: number;
+  /** Task name; a remix of the live host keeps real process names. */
+  name?: string;
 }
 
 export interface Preset {
