@@ -5,23 +5,25 @@ import {
 } from '../sim';
 import { useCosmos } from '../store';
 import { useCtl, useLiveWorld } from './context';
+import { LiveLens } from './LiveLens';
+import { useLensAvailable } from './LiveBits';
 
 export function LensPanel() {
   const lens = useCosmos(s => s.lens);
+  const readOnly = useCosmos(s => s.readOnly);
   const def = LENSES.find(l => l.id === lens);
+  const available = useLensAvailable(lens ?? 'scheduler');
   if (!def) return null;
   return (
-    <GlassPanel className="lens" aria-label={`${def.label} lens`}>
+    <GlassPanel className={`lens ${available ? '' : 'dim'}`} aria-label={`${def.label} lens`}>
       <h3>{def.title}</h3>
       {def.body.map((t, i) => (
         <p key={i}>
           <RichText text={t} />
         </p>
       ))}
-      <LensActions />
-      <div className="live">
-        <LensLive />
-      </div>
+      {!readOnly && <LensActions />}
+      <div className="live">{readOnly ? <LiveLens lens={def.id} /> : <LensLive />}</div>
       <CmdList cmds={def.cmds} />
     </GlassPanel>
   );

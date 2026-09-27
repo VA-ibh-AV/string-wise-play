@@ -1,6 +1,6 @@
 export * from './types';
 export * from './events';
-export { createWorld, step, command, record, type Command, type WorldOptions } from './world';
+export { createWorld, createEmptyWorld, step, command, viewCommand, record, type Command, type WorldOptions } from './world';
 export { memUsed, freeMem, oomScore } from './memory';
 export { hitProbability } from './pagecache';
 export { peersOf, connectionPairs } from './connections';

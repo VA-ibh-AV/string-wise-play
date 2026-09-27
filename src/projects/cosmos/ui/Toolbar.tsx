@@ -14,6 +14,16 @@ export function Toolbar() {
   const done = useCosmos(s => s.done.length);
   const open = useCosmos(s => s.missionsOpen);
   const speed = useCosmos(s => s.speed);
+  const readOnly = useCosmos(s => s.readOnly);
+  if (readOnly) {
+    return (
+      <div className="tools">
+        <button aria-pressed={sound} onClick={() => ctl.toggleSound()}>
+          {sound ? 'Sound on' : 'Sound off'}
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="tools">
       <div className="speed" role="group" aria-label="Simulation speed">

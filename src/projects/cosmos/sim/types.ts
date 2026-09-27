@@ -80,6 +80,8 @@ export interface CGroup {
 }
 
 export interface World {
+  /** 'sim' is the Sandbox simulation; 'live' mirrors a real host and is read-only. */
+  mode: 'sim' | 'live';
   seed: number;
   rng: Rng;
   clock: SimClock;
@@ -88,7 +90,8 @@ export interface World {
   nextPid: number;
   nextSyscallId: number;
   cpus: Cpu[];
-  mem: { ram: number; swap: number; cache: number; swapUsed: number; hits: number; misses: number; kswapdT: number };
+  /** RAM/swap sizes in MB. `used` is set by live sources; the sim derives it from RSS. */
+  mem: { ram: number; swap: number; cache: number; swapUsed: number; hits: number; misses: number; kswapdT: number; used?: number };
   cgroups: Map<string, CGroup>;
   cgTick: number;
   irq: {

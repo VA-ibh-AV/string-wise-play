@@ -42,8 +42,9 @@ export function createBeams(scene: THREE.Scene, soft: THREE.Texture, text: TextF
       const sched = w.view.lens === 'scheduler';
       w.cpus.forEach((cpu, i) => {
         const b = cpus[i];
+        if (!b) return; // a live host with more cores than beams
         const p = cpu.pid !== null ? w.procs.get(cpu.pid) : undefined;
-        const running = p && p.state === 'R' ? p : null;
+        const running = p && (p.state === 'R' || p.onCpu === i) ? p : null;
         const q = running ? posOf(running.pid) : undefined;
         let tx = b.x, tz = b.z, tlen = 3.5, top = 0.035;
         if (running && q) {

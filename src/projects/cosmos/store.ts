@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import type { LensId } from './content/lenses';
+import type { Cap, Host } from '@play/protocol';
 import type { MissionId } from './content/missions';
+import type { LiveConnection } from './data/live-source';
+
+export type CosmosMode = 'live' | 'sandbox';
 
 export interface CosmosState {
   /** Bumped every 300 ms so live panels re-read the world. */
@@ -17,6 +21,12 @@ export interface CosmosState {
   hover: { text: string; x: number; y: number } | null;
   announce: string;
   error: string | null;
+  mode: CosmosMode;
+  /** Live mode: no action UI is rendered at all. */
+  readOnly: boolean;
+  connection: LiveConnection | null;
+  host: Host | null;
+  caps: Cap[];
 }
 
 export const initialCosmosState: CosmosState = {
@@ -33,6 +43,11 @@ export const initialCosmosState: CosmosState = {
   hover: null,
   announce: '',
   error: null,
+  mode: 'sandbox',
+  readOnly: false,
+  connection: null,
+  host: null,
+  caps: [],
 };
 
 export const useCosmos = create<CosmosState>(() => ({ ...initialCosmosState }));

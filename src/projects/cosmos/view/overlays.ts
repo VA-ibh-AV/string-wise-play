@@ -82,7 +82,7 @@ export class Popups {
 }
 
 /** The PID namespace bubble around the checkout pod. It drifts slowly. */
-export function createBubble(scene: THREE.Scene, text: TextFactory) {
+export function createBubble(scene: THREE.Scene, text: TextFactory, labelText = 'pod: checkout · PID namespace') {
   const center = new THREE.Vector3(9, 0, 5);
   const group = new THREE.Group();
   scene.add(group);
@@ -90,12 +90,13 @@ export function createBubble(scene: THREE.Scene, text: TextFactory) {
   const rim = new THREE.MeshBasicMaterial({ color: 0x9ff0d0, transparent: true, opacity: 0.08, side: THREE.BackSide, depthWrite: false, blending: ADD });
   group.add(new THREE.Mesh(new THREE.SphereGeometry(6.4, 40, 28), fill));
   group.add(new THREE.Mesh(new THREE.SphereGeometry(6.55, 40, 28), rim));
-  const label = text.sprite('pod: checkout · PID namespace', '#9FF0D0', 0.7);
+  const label = text.sprite(labelText, '#9FF0D0', 0.7);
   label.position.set(0, 7.3, 0);
   group.add(label);
   return {
     center,
-    update(dt: number, t: number, active: boolean) {
+    update(dt: number, t: number, active: boolean, show = true) {
+      group.visible = show;
       center.set(9 + Math.sin(t * 0.05) * 3, Math.sin(t * 0.07) * 1.5, 5 + Math.cos(t * 0.05) * 2);
       group.position.copy(center);
       const k = Math.min(1, dt * 3);

@@ -30,5 +30,9 @@ export const SYSCALLS: Record<SyscallName, SyscallDef> = {
 
 export const SYSCALL_NAMES = Object.keys(SYSCALLS) as SyscallName[];
 
-export const syscallColor = (n: SyscallName) =>
-  SYSCALLS[n].block === 'D' ? '#FFB38A' : SYSCALLS[n].block === 'S' ? '#8FC3FF' : '#FFE7A8';
+/** Live hosts report any syscall name, so unknown names fall back to the non-blocking colour. */
+export const syscallColor = (n: string) => {
+  const block = SYSCALLS[n as SyscallName]?.block;
+  return block === 'D' ? '#FFB38A' : block === 'S' ? '#8FC3FF' : '#FFE7A8';
+};
+export const syscallNote = (n: string) => SYSCALLS[n as SyscallName]?.note ?? 'a system call';

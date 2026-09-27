@@ -20,7 +20,8 @@
       "@play/three-kit": ["packages/three-kit/src/index.ts"],
       "@play/audio": ["packages/audio/src/index.ts"],
       "@play/ui": ["packages/ui/src/index.ts"],
-      "@play/progress": ["packages/progress/src/index.ts"]
+      "@play/progress": ["packages/progress/src/index.ts"],
+      "@play/protocol": ["packages/protocol/src/index.ts"]
     }
   },
   "include": ["src", "packages", "vite.config.ts"]
